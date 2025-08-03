@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=./values.schema.json
+# Default values for cert-chain
+
+# Issuer names, types, and deployment configuration
+issuers:
+  selfsigned:
+    enabled: true          # Whether to create this issuer
+    name: "selfsigned-issuer"
+    type: "ClusterIssuer"  # "Issuer" or "ClusterIssuer"
+  root:
+    enabled: true          # Whether to create this issuer
+    name: "cluster-root-ca-issuer"
+    type: "ClusterIssuer"  # "Issuer" or "ClusterIssuer"
+  intermediate:
+    enabled: true          # Whether to create this issuer
+    namespace: istio-ingress
+    name: "gateway-ca-issuer"
+    type: "Issuer"  # "Issuer" or "ClusterIssuer"
+
+# Root CA Configuration
+rootCA:
+  name: "cluster-root-ca"
+  secretName: "cluster-root-ca-secret"
+  duration: "87600h" # 10 years
+  renewBefore: "8760h" # 1 year before expiry
+  commonName: "Cluster Root CA"
+  organization: "Local Development"
+  country: "US"
+
+# Intermediate CA Configuration
+intermediateCA:
+  name: "gateway-ca"
+  secretName: "gateway-ca-secret"
+  duration: "8760h" # 1 year
+  renewBefore: "720h" # 30 days before expiry
+  commonName: "Gateway CA"
+  organization: "Local Development"
+  country: "US"
+
+# Gateway Certificate Configuration
+gatewayCert:
+  enabled: false          # Whether to create gateway certificates
+  name: "gateway-cert"
+  secretName: "gateway-tls-secret"
+  duration: "2160h" # 3 months
+  renewBefore: "168h" # 1 week before expiry
+  dnsNames:
+    - "*.example.com"
+  organization: "Local Development"
+  country: "US"

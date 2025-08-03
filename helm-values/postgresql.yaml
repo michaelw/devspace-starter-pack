@@ -1,0 +1,29 @@
+auth:
+  enablePostgresUser: true
+  postgresPassword: postgres
+
+primary:
+  persistence:
+    enabled: true
+    size: 1Gi
+
+  initdb:
+    enabled: true
+    scripts:
+      init.sql: |
+        CREATE ROLE dba WITH LOGIN PASSWORD 'dba';
+        ALTER ROLE dba SUPERUSER;
+        CREATE DATABASE default OWNER dba;
+
+service:
+  type: ClusterIP
+  port: 5432
+
+# Extra pod resources for local
+resources:
+  requests:
+    memory: 128Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 250m

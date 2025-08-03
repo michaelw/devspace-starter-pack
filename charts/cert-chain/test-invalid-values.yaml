@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=./values.schema.json
+# Invalid values file for testing
+
+issuers:
+  selfsigned:
+    enabled: true
+    name: ""  # INVALID: empty name
+    type: "ClusterIssuer"
+  root:
+    enabled: true
+    name: "test-issuer"
+    type: "ClusterIssuer"
+  intermediate:
+    enabled: true
+    name: "test-issuer"  # INVALID: same name as root
+    type: "ClusterIssuer"
+
+rootCA:
+  name: ""  # INVALID: empty name
+  secretName: "Root-CA-Secret"  # INVALID: uppercase not allowed
+  duration: "invalid-duration"  # INVALID: wrong format
+  renewBefore: "8760h"
+  commonName: "Test Root CA"
+  organization: "Test Organization"
+  country: "usa"  # INVALID: should be uppercase
+
+intermediateCA:
+  name: "test-intermediate-ca"
+  # secretName missing - INVALID: required field
+  duration: "8760h"
+  renewBefore: "720h"
+  commonName: "Test Intermediate CA"
+  organization: "Test Organization"
+  country: "US"
+
+gatewayCert:
+  enabled: true
+  name: "test-gateway-cert"
+  secretName: "test-gateway-tls-secret"
+  duration: "2160h"
+  renewBefore: "168h"
+  dnsNames: []  # INVALID: empty array
+  organization: "Test Organization"
+  country: "US"

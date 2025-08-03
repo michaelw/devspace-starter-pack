@@ -1,0 +1,470 @@
+version: v2beta1
+
+name: infra
+
+require:
+  commands:
+    - name: yq
+      versionArgs: ["--version"]
+      versionRegEx: "yq \\(https://github.com/mikefarah/yq/\\) version (v\\d+\\.\\d+\\.\\d+)"
+      version: ">= 4"
+
+vars:
+  ISTIO_CHART_VERSION: 1.26.2
+  METALLB_CHART_VERSION: v0.15.2
+  POSTGRES_VERSION: 16
+  POSTGRES_CHART_VERSION: 16.7.20
+  REDIS_CHART_VERSION: 21.2.12
+  # XXX pin all versions
+
+  # XXX modify default bridge to carve out LB CIDR block, do not just alias it...
+  DOCKER_CIDR_PREFIX: "172.17.255"
+
+deployments:
+  trust-bundle:
+    kubectl:
+      inlineManifest: |
+        apiVersion: trust.cert-manager.io/v1alpha1
+        kind: Bundle
+        metadata:
+          name: cluster-trust-bundle
+        spec:
+          sources:
+          - useDefaultCAs: true # XXX outdated ca-certificates?
+          - secret:
+              name: "cluster-root-ca-secret"
+              key: "tls.crt"
+          target:
+            configMap:
+              key: "trust-bundle.pem"
+            namespaceSelector:
+              matchLabels:
+                kubernetes.io/metadata.name: ${DEVSPACE_NAMESPACE}
+
+profiles:
+  - name: local-network
+    description: Network, Gateways, Ingress
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^(kind|docker-desktop|minikube|rancher-desktop|microk8s)$"
+    merge:
+      deployments:
+        metallb:
+          namespace: metallb-system
+          helm:
+            chart:
+              name: metallb
+              version: ${METALLB_CHART_VERSION}
+              repo: https://metallb.github.io/metallb
+
+        metallb-resources:
+          namespace: metallb-system
+          kubectl:
+            inlineManifest: |-
+              ---
+              apiVersion: metallb.io/v1beta1
+              kind: IPAddressPool
+              metadata:
+                name: host-pool
+              spec:
+                addresses:
+                - ${DOCKER_CIDR_PREFIX}.192/26
+              ---
+              apiVersion: metallb.io/v1beta1
+              kind: L2Advertisement
+              metadata:
+                name: host-pool
+              spec:
+                ipAddressPools:
+                - host-pool
+
+        istio-base:
+          namespace: istio-system
+          helm:
+            chart:
+              name: base
+              version: ${ISTIO_CHART_VERSION}
+              repo: https://istio-release.storage.googleapis.com/charts
+
+        istiod:
+          namespace: istio-system
+          helm:
+            chart:
+              name: istiod
+              version: ${ISTIO_CHART_VERSION}
+              repo: https://istio-release.storage.googleapis.com/charts
+
+        gateway-api-crds:
+          namespace: istio-ingress
+          kubectl:
+            kustomize: true
+            manifests:
+              - https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=v1.3.0
+
+        cluster-gateway:
+          namespace: istio-ingress
+          kubectl:
+            manifests:
+              - ./manifests/gateway.yaml
+
+  - name: local-dns
+    description: Local DNS integration for development
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^(kind|docker-desktop|minikube|rancher-desktop|microk8s)$"
+    merge:
+      deployments:
+        etcd:
+          namespace: external-dns
+          helm:
+            chart:
+              name: etcd
+              repo: https://charts.bitnami.com/bitnami
+            values:
+              persistence:
+                enabled: true
+              securityContext:
+                runAsUser: 999
+
+        coredns-external:
+          namespace: external-dns
+          helm:
+            chart:
+              name: coredns
+              repo: https://coredns.github.io/helm
+            values:
+              service:
+                loadBalancerIP: ${DOCKER_CIDR_PREFIX}.254
+
+            valuesFiles:
+              - ./helm-values/coredns-external.yaml
+
+        external-dns:
+          namespace: external-dns
+          helm:
+            chart:
+              name: oci://registry-1.docker.io/bitnamicharts/external-dns
+            valuesFiles:
+              - ./helm-values/external-dns.yaml
+
+  - name: local-certs
+    description: Certificate Management
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^(kind|docker-desktop|minikube|rancher-desktop|microk8s)$"
+    merge:
+      deployments:
+        cert-manager:
+          namespace: cert-manager
+          helm:
+            chart:
+              name: cert-manager
+              repo: https://charts.jetstack.io
+            values:
+              installCRDs: true
+              config:
+                apiVersion: controller.config.cert-manager.io/v1alpha1
+                kind: ControllerConfiguration
+                enableGatewayAPI: true
+              securityContext:
+                runAsUser: 999
+              cainjector:
+                securityContext:
+                  runAsUser: 999
+              webhook:
+                securityContext:
+                  runAsUser: 999
+              startupapicheck:
+                securityContext:
+                  runAsUser: 999
+
+        trust-manager:
+          namespace: cert-manager
+          helm:
+            chart:
+              name: trust-manager
+              repo: https://charts.jetstack.io
+
+        reflector:
+          namespace: reflector
+          helm:
+            chart:
+              name: oci://ghcr.io/emberstack/helm-charts/reflector
+            values:
+              reflector:
+                securityContext:
+                  runAsUser: 999
+
+        cert-chain:
+          namespace: cert-manager
+          helm:
+            chart:
+              name: cert-chain
+              path: ./charts/cert-chain
+            values:
+              gatewayCert:
+                enabled: false
+
+  - name: local-aux
+    description: Auxiliary services
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^(kind|docker-desktop|minikube|rancher-desktop|microk8s)$"
+    merge:
+      deployments:
+        reloader:
+          namespace: reloader
+          helm:
+            chart:
+              name: reloader
+              repo: https://stakater.github.io/stakater-charts
+            values:
+              securityContext:
+                runAsUser: 999
+
+  - name: local-test
+    description: Test applications
+    merge:
+      deployments:
+        httpbin:
+          namespace: httpbin
+          kubectl:
+            manifests:
+              - https://raw.githubusercontent.com/istio/istio/release-1.26/samples/httpbin/httpbin.yaml
+              - ./manifests/httpbin-routes.yaml
+
+  - name: o11y
+    description: Cluster Observability
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^(kind|docker-desktop|minikube|rancher-desktop|microk8s)$"
+    merge:
+      deployments:
+        prometheus:
+          namespace: observability
+          helm:
+            chart:
+              name: kube-prometheus-stack
+              repo: https://prometheus-community.github.io/helm-charts
+            valuesFiles:
+              - ./helm-values/prometheus.yaml
+        metric-server:
+          namespace: kube-system
+          helm:
+            chart:
+              name: metrics-server
+              repo: https://kubernetes-sigs.github.io/metrics-server
+            values:
+              args:
+                - --kubelet-insecure-tls
+
+  - name: o11y-addons
+    description: Observability addons (non-essential)
+    merge:
+      deployments:
+        alloy:
+          namespace: observability
+          helm:
+            chart:
+              name: alloy
+              version: 1.10.0
+              repo: https://grafana.github.io/helm-charts
+            valuesFiles:
+              - ./helm-values/alloy.yaml
+
+        loki:
+          namespace: observability
+          helm:
+            chart:
+              name: loki
+              repo: https://grafana.github.io/helm-charts
+            valuesFiles:
+              - ./helm-values/loki.yaml
+
+        tempo:
+          namespace: observability
+          helm:
+            chart:
+              name: tempo
+              repo: https://grafana.github.io/helm-charts
+            valuesFiles:
+              - ./helm-values/tempo.yaml
+
+        grafana:
+          namespace: observability
+          helm:
+            chart:
+              name: grafana
+              repo: https://grafana.github.io/helm-charts
+            valuesFiles:
+              - ./helm-values/grafana.yaml
+
+  - name: local-psql
+    description: PostgreSQL for data storage
+    merge:
+      deployments:
+        postgres:
+          helm:
+            chart:
+              name: postgresql
+              version: ${POSTGRES_CHART_VERSION}
+              repo: https://charts.bitnami.com/bitnami
+            values:
+              image:
+                tag: ${POSTGRES_VERSION}
+            valuesFiles:
+              - ./helm-values/postgresql.yaml
+
+  - name: local-redis
+    description: Redis for data storage
+    merge:
+      deployments:
+        redis:
+          helm:
+            chart:
+              name: redis
+              version: ${REDIS_CHART_VERSION}
+              repo: https://charts.bitnami.com/bitnami
+            valuesFiles:
+              - ./helm-values/redis.yaml
+
+  - name: local-es
+    description: ElasticSearch
+    merge:
+      deployments:
+        elasticsearch:
+          namespace: elasticsearch
+          helm:
+            chart:
+              name: elasticsearch
+              repo: https://helm.elastic.co
+            values:
+              replicas: 1
+              minimumMasterNodes: 1
+              esJavaOpts: "-Xmx128m -Xms128m"
+              protocol: http
+              extraEnvs:
+                - name: xpack.security.http.ssl.enabled
+                  value: "false"
+              secret:
+                password: "elastic"
+
+hooks:
+  - name: docker-mac-connect-hook
+    command: |
+      # check if docker-mac-net-connect is running, otherwise install and start it
+      echo >&2 "I: Checking whether docker-mac-net-connect is installed..."
+      if ! sudo brew services list | grep -q docker-mac-net-connect; then
+        echo >&2 "I: Installing docker-mac-net-connect..."
+        if ! brew install chipmk/tap/docker-mac-net-connect; then
+          echo >&2 "E: Failed to install docker-mac-net-connect. Please check your Homebrew setup."
+          exit 1
+        fi
+      else
+        echo >&2 "I: docker-mac-net-connect is already installed."
+      fi
+      sudo brew services start chipmk/tap/docker-mac-net-connect
+    events: ["after:deploy:metallb"]
+
+  - name: metallb-node-label-hook
+    command: kubectl label nodes --all node.kubernetes.io/exclude-from-external-load-balancers-
+    silent: true
+    events: ["before:deploy:metallb"]
+
+  - name: update-cluster-dns-hook
+    command: devspace run update-cluster-dns
+    events: ["after:deploy:cert-chain"]
+
+  - name: cert-chain-hook
+    command: |
+      while ! devspace run import-root-ca; do
+        echo >&2 "I: Waiting for root CA to be available..."
+        sleep 5
+      done
+    events: ["after:deploy:cert-chain"]
+
+  - name: wait-for-trust-manager-hook
+    wait:
+      running: true
+    container:
+      namespace: cert-manager
+      containerName: trust-manager
+      labelSelector:
+        app.kubernetes.io/instance: trust-manager
+    events: ["after:deploy:trust-manager"]
+
+pipelines:
+  deploy:
+    run: |-
+      PHASES=(
+        "gateway-api-crds"
+        "cert-manager metallb reflector"
+        "cert-chain trust-manager"
+        "istio-base"
+        "istiod"
+      )
+      run_dependencies --all
+      ensure_pull_secrets --all
+      build_images --all
+
+      enabled="$(get_config_value deployments | yq 'keys | join(" ")')"
+      for phase in "${PHASES[@]}"; do
+        final=()
+        for d in $phase; do
+          if is_in "$d" "$enabled"; then
+            final+=("$d")
+          fi
+        done
+        if [ ${#final[@]} -gt 0 ]; then
+          create_deployments "${final[@]}"
+        fi
+      done
+      create_deployments --all --except ${PHASES[@]}
+
+commands:
+  update-cluster-dns:
+    description: Make external cluster DNS available on the host
+    section: network
+    command: |
+      echo >&2 "I: Updating DNS settings..."
+      sudo scutil <<EOF
+      open
+      d.init
+      d.add ServerAddresses * ${DOCKER_CIDR_PREFIX}.254
+      d.add SupplementalMatchDomains * kube
+      set State:/Network/Service/kube/DNS
+      quit
+      EOF
+
+  reset-cluster-dns:
+    description: Reset DNS service
+    section: network
+    command: |
+      echo >&2 "I: Resetting DNS..."
+      sudo scutil <<EOF
+      open
+      remove State:/Network/Service/kube/DNS
+      quit
+      EOF
+
+  import-root-ca:
+    description: Import the root CA certificate of the cluster
+    section: network
+    command: |
+      CERTFILE=$(mktemp -t cluster-root-ca.XXXXXX.crt)
+      # Ensure cleanup on exit
+      trap 'rm -f "${CERTFILE}"' EXIT
+
+      echo >&2 "I: Extracting Root CA certificate..."
+      kubectl get secret -n istio-ingress cluster-root-ca-secret -o jsonpath='{.data.tls\.crt}' | base64 -d > "${CERTFILE}"
+      if [ ! -s "${CERTFILE}" ]; then
+        echo >&2 "E: Failed to extract certificate or certificate is empty"
+        exit 1
+      fi
+      openssl x509 -in "${CERTFILE}" -subject -issuer -dates -noout
+
+      # Add to system keychain (requires admin password)
+      echo >&2 "I: Adding certificate to macOS keychain..."
+      sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "${CERTFILE}"
+
+      echo >&2 "I: Root CA certificate imported successfully to system keychain."

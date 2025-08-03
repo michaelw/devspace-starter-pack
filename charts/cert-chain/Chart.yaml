@@ -1,0 +1,8 @@
+apiVersion: v2
+name: cert-chain
+description: A Helm chart for cert-manager certificate chain with self-signed root CA and intermediate CA
+type: application
+version: 0.1.0
+appVersion: "1.0"
+dependencies: []
+kubeVersion: ">=1.19.0"

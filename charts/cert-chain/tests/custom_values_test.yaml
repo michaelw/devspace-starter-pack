@@ -1,0 +1,107 @@
+suite: test custom values
+templates:
+  - templates/root-ca.yaml
+  - templates/intermediate-ca.yaml
+  - templates/gateway-cert.yaml
+tests:
+  - it: should create root CA with custom values
+    set:
+      rootCA:
+        name: "custom-root-ca"
+        secretName: "custom-root-secret"
+        commonName: "Custom Root CA"
+        duration: "876000h"  # 100 years
+        renewBefore: "8760h"  # 1 year
+        country: "CA"
+        organization: "Custom Org"
+    template: templates/root-ca.yaml
+    asserts:
+      - hasDocuments:
+          count: 3
+      - equal:
+          path: metadata.name
+          value: "custom-root-ca"
+        documentIndex: 1
+      - equal:
+          path: spec.secretName
+          value: "custom-root-secret"
+        documentIndex: 1
+      - equal:
+          path: spec.commonName
+          value: "Custom Root CA"
+        documentIndex: 1
+      - equal:
+          path: spec.duration
+          value: "876000h"
+        documentIndex: 1
+      - equal:
+          path: spec.renewBefore
+          value: "8760h"
+        documentIndex: 1
+
+  - it: should create intermediate CA with custom values
+    set:
+      intermediateCA:
+        name: "custom-intermediate-ca"
+        secretName: "custom-intermediate-secret"
+        commonName: "Custom Intermediate CA"
+        duration: "43800h"  # 5 years
+        renewBefore: "4380h"  # 6 months
+        country: "CA"
+        organization: "Custom Org"
+    template: templates/intermediate-ca.yaml
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: metadata.name
+          value: "custom-intermediate-ca"
+        documentIndex: 1
+      - equal:
+          path: spec.secretName
+          value: "custom-intermediate-secret"
+        documentIndex: 1
+      - equal:
+          path: spec.commonName
+          value: "Custom Intermediate CA"
+        documentIndex: 1
+      - equal:
+          path: spec.duration
+          value: "43800h"
+        documentIndex: 1
+
+  - it: should create gateway certificate with custom values
+    set:
+      gatewayCert:
+        enabled: true
+        name: "custom-gateway-cert"
+        secretName: "custom-gateway-secret"
+        duration: "168h"  # 1 week
+        renewBefore: "24h"  # 1 day
+        dnsNames:
+          - "custom.example.com"
+          - "*.custom.example.com"
+        country: "GB"
+        organization: "Custom Gateway Org"
+    template: templates/gateway-cert.yaml
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: "custom-gateway-cert"
+      - equal:
+          path: spec.secretName
+          value: "custom-gateway-secret"
+      - equal:
+          path: spec.duration
+          value: "168h"
+      - equal:
+          path: spec.renewBefore
+          value: "24h"
+      - contains:
+          path: spec.dnsNames
+          content: "custom.example.com"
+      - contains:
+          path: spec.dnsNames
+          content: "*.custom.example.com"

@@ -1,0 +1,32 @@
+nodeExporter:
+  enabled: false
+
+alertmanager:
+  enabled: false
+
+grafana:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    podMonitorSelector: {}
+    remoteWrite:
+      - url: http://alloy.observability.svc.cluster.local:12345/api/v1/remote_write # Optional if Alloy pushes
+    retention: 6h
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+
+serviceAccounts:
+  alertmanager:
+    create: false
+  pushgateway:
+    create: false
+  server:
+    create: true

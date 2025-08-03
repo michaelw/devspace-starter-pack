@@ -1,0 +1,10 @@
+alloy:
+  clustering:
+    enabled: false
+  configMap:
+    create: true
+  storagePath: /tmp/alloy
+
+controller:
+  type: daemonset
+  replicas: 1

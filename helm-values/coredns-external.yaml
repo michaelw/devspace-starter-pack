@@ -1,0 +1,45 @@
+serviceType: LoadBalancer
+
+isClusterService: false
+
+service:
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: ns.dns.kube
+
+servers:
+- zones:
+  - zone: kube.
+  port: 53
+  plugins:
+  - name: errors
+  - name: log
+  - name: health
+    configBlock: |-
+      lameduck 10s
+  - name: ready
+  - name: etcd
+    parameters: kube.
+    configBlock: |-
+      stubzones
+      path /skydns
+      endpoint http://etcd:2379
+      credentials {%ETCD_USERNAME%} {%ETCD_PASSWORD%}
+  - name: prometheus
+    parameters: 0.0.0.0:9153
+  - name: cache
+    parameters: 30
+  - name: loop
+  - name: reload
+  - name: loadbalance
+
+env:
+- name: ETCD_USERNAME
+  value: "root"
+- name: ETCD_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: etcd
+      key: etcd-root-password
+
+rbac:
+  create: true

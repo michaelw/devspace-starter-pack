@@ -1,0 +1,26 @@
+domainFilters:
+  - kube
+provider: coredns
+policy: sync
+coredns:
+  etcdEndpoints: "http://etcd:2379"
+sources:
+  - service
+  - ingress
+  - gateway-httproute
+  - gateway-grpcroute
+  # experimental
+  # - gateway-tlsroute
+  # - gateway-tcproute
+  # - gateway-udproute
+extraEnvVars:
+  - name: ETCD_USERNAME
+    value: root
+  - name: ETCD_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: etcd
+        key: etcd-root-password
+rbac:
+  create: true
+logLevel: debug

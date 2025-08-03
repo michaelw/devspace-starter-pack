@@ -1,0 +1,39 @@
+adminUser: admin
+adminPassword: admin
+
+replicas: 1
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus.observability.svc.cluster.local:9090
+        access: proxy
+        isDefault: true
+      - name: Loki
+        type: loki
+        url: http://loki.observability.svc.cluster.local:3100
+        access: proxy
+      - name: Tempo
+        type: tempo
+        url: http://tempo.observability.svc.cluster.local:3200
+        access: proxy
+        jsonData:
+          tracesToLogs:
+            datasourceUid: 'loki'
+            filterByTraceID: true
+            filterBySpanID: false
+            tags:
+              - job
+          lokiSearch:
+            datasourceUid: 'loki'
+
+service:
+  type: ClusterIP
+  port: 3000
+
+persistence:
+  enabled: true
+  size: 2Gi

@@ -1,0 +1,256 @@
+suite: comprehensive certificate chain tests
+templates:
+  - templates/root-ca.yaml
+  - templates/intermediate-ca.yaml
+  - templates/gateway-cert.yaml
+tests:
+  # Test 1: All disabled by default (minimal test)
+  - it: should create no resources when all disabled
+    set:
+      issuers:
+        selfsigned:
+          enabled: false
+        root:
+          enabled: false
+        intermediate:
+          enabled: false
+      gatewayCert:
+        enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/root-ca.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/intermediate-ca.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/gateway-cert.yaml
+
+  # Test 2: Full chain with Issuers
+  - it: should create full chain with Issuer types
+    set:
+      issuers:
+        selfsigned:
+          name: "test-selfsigned-issuer"
+          type: "Issuer"
+          enabled: true
+        root:
+          name: "test-root-issuer"
+          type: "Issuer"
+          enabled: true
+        intermediate:
+          name: "test-intermediate-issuer"
+          type: "Issuer"
+          enabled: true
+      rootCA:
+        name: "test-root-ca"
+        secretName: "test-root-secret"
+        duration: "87600h"
+        renewBefore: "8760h"
+        commonName: "Test Root CA"
+        organization: "Test Org"
+        country: "US"
+      intermediateCA:
+        name: "test-intermediate-ca"
+        secretName: "test-intermediate-secret"
+        duration: "8760h"
+        renewBefore: "720h"
+        commonName: "Test Intermediate CA"
+        organization: "Test Org"
+        country: "US"
+      gatewayCert:
+        enabled: true
+        name: "test-gateway-cert"
+        secretName: "test-gateway-secret"
+        duration: "2160h"
+        renewBefore: "168h"
+        dnsNames:
+          - "test.example.com"
+        organization: "Test Org"
+        country: "US"
+    asserts:
+      # Root CA should create 3 resources: selfsigned issuer, certificate, root issuer
+      - hasDocuments:
+          count: 3
+        template: templates/root-ca.yaml
+      - isKind:
+          of: Issuer
+        template: templates/root-ca.yaml
+        documentIndex: 0
+      - equal:
+          path: metadata.namespace
+          value: NAMESPACE
+        template: templates/root-ca.yaml
+        documentIndex: 0
+      - isKind:
+          of: Certificate
+        template: templates/root-ca.yaml
+        documentIndex: 1
+      - equal:
+          path: spec.isCA
+          value: true
+        template: templates/root-ca.yaml
+        documentIndex: 1
+      # Intermediate CA should create 2 resources
+      - hasDocuments:
+          count: 2
+        template: templates/intermediate-ca.yaml
+      - isKind:
+          of: Issuer
+        template: templates/intermediate-ca.yaml
+        documentIndex: 0
+      - isKind:
+          of: Certificate
+        template: templates/intermediate-ca.yaml
+        documentIndex: 1
+      # Gateway cert should create 1 resource
+      - hasDocuments:
+          count: 1
+        template: templates/gateway-cert.yaml
+      - isKind:
+          of: Certificate
+        template: templates/gateway-cert.yaml
+
+  # Test 3: Full chain with ClusterIssuers
+  - it: should create full chain with ClusterIssuer types
+    set:
+      issuers:
+        selfsigned:
+          name: "test-selfsigned-issuer"
+          type: "ClusterIssuer"
+          enabled: true
+        root:
+          name: "test-root-issuer"
+          type: "ClusterIssuer"
+          enabled: true
+        intermediate:
+          name: "test-intermediate-issuer"
+          type: "ClusterIssuer"
+          enabled: true
+      rootCA:
+        name: "test-root-ca"
+        secretName: "test-root-secret"
+        duration: "87600h"
+        renewBefore: "8760h"
+        commonName: "Test Root CA"
+        organization: "Test Org"
+        country: "US"
+      intermediateCA:
+        name: "test-intermediate-ca"
+        secretName: "test-intermediate-secret"
+        duration: "8760h"
+        renewBefore: "720h"
+        commonName: "Test Intermediate CA"
+        organization: "Test Org"
+        country: "US"
+      gatewayCert:
+        enabled: true
+        name: "test-gateway-cert"
+        secretName: "test-gateway-secret"
+        duration: "2160h"
+        renewBefore: "168h"
+        dnsNames:
+          - "test.example.com"
+        organization: "Test Org"
+        country: "US"
+    asserts:
+      # ClusterIssuers should not have namespace
+      - isKind:
+          of: ClusterIssuer
+        template: templates/root-ca.yaml
+        documentIndex: 0
+      - notExists:
+          path: metadata.namespace
+        template: templates/root-ca.yaml
+        documentIndex: 0
+      - isKind:
+          of: ClusterIssuer
+        template: templates/intermediate-ca.yaml
+        documentIndex: 0
+      - notExists:
+          path: metadata.namespace
+        template: templates/intermediate-ca.yaml
+        documentIndex: 0
+
+  # Test 4: Mixed scenario - Root CA as ClusterIssuer, others in namespace
+  - it: should support mixed issuer types with custom namespaces
+    set:
+      issuers:
+        selfsigned:
+          name: "global-selfsigned-issuer"
+          type: "ClusterIssuer"
+          enabled: true
+        root:
+          name: "global-root-issuer"
+          type: "ClusterIssuer"
+          enabled: true
+        intermediate:
+          name: "istio-intermediate-issuer"
+          type: "Issuer"
+          enabled: true
+          namespace: "istio-system"
+      rootCA:
+        name: "global-root-ca"
+        secretName: "global-root-secret"
+        duration: "87600h"
+        renewBefore: "8760h"
+        commonName: "Global Root CA"
+        organization: "Global Org"
+        country: "US"
+      intermediateCA:
+        namespace: "istio-system"
+        name: "istio-intermediate-ca"
+        secretName: "istio-intermediate-secret"
+        duration: "8760h"
+        renewBefore: "720h"
+        commonName: "Istio Intermediate CA"
+        organization: "Istio Org"
+        country: "US"
+      gatewayCert:
+        enabled: true
+        name: "istio-gateway-cert"
+        secretName: "istio-gateway-secret"
+        duration: "2160h"
+        renewBefore: "168h"
+        dnsNames:
+          - "*.istio.example.com"
+        organization: "Istio Org"
+        country: "US"
+    asserts:
+      # Root CA should be ClusterIssuer (no namespace)
+      - isKind:
+          of: ClusterIssuer
+        template: templates/root-ca.yaml
+        documentIndex: 0
+      - notExists:
+          path: metadata.namespace
+        template: templates/root-ca.yaml
+        documentIndex: 0
+      # Root CA certificate should be in default namespace
+      - equal:
+          path: metadata.namespace
+          value: NAMESPACE
+        template: templates/root-ca.yaml
+        documentIndex: 1
+      # Intermediate CA issuer should be in istio-system
+      - isKind:
+          of: Issuer
+        template: templates/intermediate-ca.yaml
+        documentIndex: 0
+      - equal:
+          path: metadata.namespace
+          value: "istio-system"
+        template: templates/intermediate-ca.yaml
+        documentIndex: 0
+      # Intermediate CA certificate should be in istio-system
+      - equal:
+          path: metadata.namespace
+          value: "istio-system"
+        template: templates/intermediate-ca.yaml
+        documentIndex: 1
+      # Gateway cert should be in istio-system
+      - equal:
+          path: metadata.namespace
+          value: "istio-system"
+        template: templates/gateway-cert.yaml

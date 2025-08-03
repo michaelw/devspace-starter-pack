@@ -1,0 +1,24 @@
+loki:
+  auth_enabled: false
+  storage:
+    type: 'filesystem'
+  limits_config:
+    retention_period: 24h
+  schema_config:
+    configs:
+      - from: 2024-01-01
+        store: boltdb-shipper
+        object_store: filesystem
+        schema: v12
+        index:
+          prefix: index_
+          period: 24h
+  compactor:
+    enabled: true
+  ingester:
+    chunk_idle_period: 1m
+  server:
+    http_listen_port: 3100
+  persistence:
+    enabled: true
+    size: 2Gi

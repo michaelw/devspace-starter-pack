@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=./values.schema.json
+# Valid values file for testing
+
+issuers:
+  selfsigned:
+    enabled: true
+    name: "test-selfsigned-issuer"
+    type: "ClusterIssuer"
+  root:
+    enabled: true
+    name: "test-root-ca-issuer"
+    type: "ClusterIssuer"
+  intermediate:
+    enabled: true
+    name: "test-intermediate-ca-issuer"
+    type: "ClusterIssuer"
+
+rootCA:
+  name: "test-root-ca"
+  secretName: "test-root-ca-secret"
+  duration: "87600h"
+  renewBefore: "8760h"
+  commonName: "Test Root CA"
+  organization: "Test Organization"
+  country: "US"
+
+intermediateCA:
+  name: "test-intermediate-ca"
+  secretName: "test-intermediate-ca-secret"
+  duration: "8760h"
+  renewBefore: "720h"
+  commonName: "Test Intermediate CA"
+  organization: "Test Organization"
+  country: "US"
+
+gatewayCert:
+  enabled: true
+  name: "test-gateway-cert"
+  secretName: "test-gateway-tls-secret"
+  duration: "2160h"
+  renewBefore: "168h"
+  dnsNames:
+    - "*.test.local"
+    - "api.test.local"
+  organization: "Test Organization"
+  country: "US"

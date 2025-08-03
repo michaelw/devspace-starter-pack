@@ -1,0 +1,42 @@
+{{- if (.Values.issuers.intermediate).enabled }}
+{{- $intermediateIssuerType := .Values.issuers.intermediate.type | default "Issuer" }}
+{{- $rootIssuerType := .Values.issuers.root.type | default "Issuer" }}
+{{- $intermediateNamespace := (.Values.issuers.intermediate).namespace | default .Release.Namespace }}
+---
+# Intermediate CA Issuer for signing Gateway certificates
+apiVersion: cert-manager.io/v1
+kind: {{ $intermediateIssuerType }}
+metadata:
+  name: {{ .Values.issuers.intermediate.name }}
+  {{- if eq $intermediateIssuerType "Issuer" }}
+  namespace: {{ $intermediateNamespace }}
+  {{- end }}
+spec:
+  ca:
+    secretName: {{ .Values.rootCA.secretName }}
+---
+# Intermediate CA Certificate
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.intermediateCA.name }}
+  namespace: {{ $intermediateNamespace }}
+spec:
+  secretName: {{ .Values.intermediateCA.secretName }}
+  duration: {{ .Values.intermediateCA.duration }}
+  renewBefore: {{ .Values.intermediateCA.renewBefore }}
+  subject:
+    countries:
+      - {{ .Values.intermediateCA.country }}
+    organizations:
+      - {{ .Values.intermediateCA.organization }}
+  commonName: {{ .Values.intermediateCA.commonName }}
+  isCA: true
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  issuerRef:
+    name: {{ .Values.issuers.root.name }}
+    kind: {{ $rootIssuerType }}
+    group: cert-manager.io
+{{- end }}

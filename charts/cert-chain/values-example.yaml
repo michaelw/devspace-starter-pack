@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=./values.schema.json
+# Example values file demonstrating all cert-chain configuration options
+
+# Issuer names and types - configures the cert-manager issuers that will be created
+issuers:
+  selfsigned:
+    enabled: true
+    name: "example-selfsigned-issuer"
+    type: "ClusterIssuer"                 # "Issuer" or "ClusterIssuer"
+  root:
+    enabled: true
+    name: "example-root-ca-issuer"
+    type: "ClusterIssuer"                 # "Issuer" or "ClusterIssuer"
+  intermediate:
+    enabled: true
+    name: "example-intermediate-ca-issuer"
+    type: "Issuer"                        # "Issuer" or "ClusterIssuer"
+
+# Root CA Configuration - Creates a self-signed root certificate authority
+rootCA:
+  namespace: ""                           # Custom namespace (optional, defaults to release namespace)
+  name: "example-root-ca"
+  secretName: "example-root-ca-secret"
+  duration: "87600h"                      # 10 years
+  renewBefore: "8760h"                    # 1 year before expiry
+  commonName: "Example Root CA"
+  organization: "Example Organization"
+  country: "US"
+
+# Intermediate CA Configuration - Creates an intermediate CA signed by the root CA
+intermediateCA:
+  namespace: "istio-system"               # Custom namespace for intermediate CA
+  name: "example-intermediate-ca"
+  secretName: "example-intermediate-ca-secret"
+  duration: "8760h"                       # 1 year
+  renewBefore: "720h"                     # 30 days before expiry
+  commonName: "Example Intermediate CA"
+  organization: "Example Organization"
+  country: "US"
+
+# Gateway Certificate Configuration - Creates end-entity certificates for services
+gatewayCert:
+  enabled: true                           # Set to true to create gateway certificate
+  name: "example-gateway-cert"
+  secretName: "example-gateway-tls-secret"
+  duration: "2160h"                       # 3 months
+  renewBefore: "168h"                     # 1 week before expiry
+  dnsNames:
+    - "*.example.com"
+    - "*.api.example.com"
+    - "dashboard.example.com"
+  organization: "Example Organization"
+  country: "US"

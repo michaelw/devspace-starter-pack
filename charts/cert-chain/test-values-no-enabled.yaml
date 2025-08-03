@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=./values.schema.json
+# Test values without enabled keys to test safe optional key handling
+
+issuers:
+  selfsigned:
+    enabled: false
+    name: "test-selfsigned-issuer"
+    type: "ClusterIssuer"
+  root:
+    enabled: false
+    name: "test-root-ca-issuer"
+    type: "ClusterIssuer"
+  intermediate:
+    enabled: false
+    name: "test-intermediate-ca-issuer"
+    type: "ClusterIssuer"
+
+rootCA:
+  name: "test-root-ca"
+  secretName: "test-root-ca-secret"
+  duration: "87600h"
+  renewBefore: "8760h"
+  commonName: "Test Root CA"
+  organization: "Test Org"
+  country: "US"
+
+intermediateCA:
+  name: "test-intermediate-ca"
+  secretName: "test-intermediate-ca-secret"
+  duration: "8760h"
+  renewBefore: "720h"
+  commonName: "Test Intermediate CA"
+  organization: "Test Org"
+  country: "US"
+
+gatewayCert:
+  enabled: false
+  name: "test-gateway-cert"
+  secretName: "test-gateway-secret"
+  duration: "2160h"
+  renewBefore: "168h"
+  dnsNames:
+    - "test.example.com"
+  organization: "Test Org"
+  country: "US"

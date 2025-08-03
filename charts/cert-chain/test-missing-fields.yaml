@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=./values.schema.json
+# Missing required fields
+
+# Missing entire issuers section
+# Missing entire intermediateCA section
+# Missing entire gatewayCert section
+
+rootCA:
+  name: "test-root-ca"
+  # Missing many required fields: secretName, duration, renewBefore, commonName, organization, country

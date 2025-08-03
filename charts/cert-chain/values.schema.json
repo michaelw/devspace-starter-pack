@@ -1,0 +1,322 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "title": "cert-chain Helm Chart Values Schema",
+    "description": "Schema for validating cert-chain chart values",
+    "required": [
+        "rootCA",
+        "intermediateCA",
+        "gatewayCert",
+        "issuers"
+    ],
+    "properties": {
+        "issuers": {
+            "type": "object",
+            "title": "Issuer Configuration",
+            "required": [
+                "selfsigned",
+                "root",
+                "intermediate"
+            ],
+            "properties": {
+                "selfsigned": {
+                    "type": "object",
+                    "title": "Self-signed Issuer Configuration",
+                    "required": [
+                        "name",
+                        "type",
+                        "enabled"
+                    ],
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "title": "Self-signed Issuer Name",
+                            "minLength": 1,
+                            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                        },
+                        "type": {
+                            "type": "string",
+                            "title": "Self-signed Issuer Type",
+                            "enum": [
+                                "Issuer",
+                                "ClusterIssuer"
+                            ]
+                        },
+                        "enabled": {
+                            "type": "boolean",
+                            "title": "Enable Self-signed Issuer",
+                            "description": "Whether to create this issuer"
+                        },
+                        "namespace": {
+                            "type": "string",
+                            "title": "Namespace",
+                            "description": "Namespace for Issuer type (ignored for ClusterIssuer)"
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "root": {
+                    "type": "object",
+                    "title": "Root CA Issuer Configuration",
+                    "required": [
+                        "name",
+                        "type",
+                        "enabled"
+                    ],
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "title": "Root CA Issuer Name",
+                            "minLength": 1,
+                            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                        },
+                        "type": {
+                            "type": "string",
+                            "title": "Root CA Issuer Type",
+                            "enum": [
+                                "Issuer",
+                                "ClusterIssuer"
+                            ]
+                        },
+                        "enabled": {
+                            "type": "boolean",
+                            "title": "Enable Root CA Issuer",
+                            "description": "Whether to create this issuer"
+                        },
+                        "namespace": {
+                            "type": "string",
+                            "title": "Namespace",
+                            "description": "Namespace for Issuer type (ignored for ClusterIssuer)"
+                        }
+                    },
+                    "additionalProperties": false
+                },
+                "intermediate": {
+                    "type": "object",
+                    "title": "Intermediate CA Issuer Configuration",
+                    "required": [
+                        "name",
+                        "type",
+                        "enabled"
+                    ],
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "title": "Intermediate CA Issuer Name",
+                            "minLength": 1,
+                            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                        },
+                        "type": {
+                            "type": "string",
+                            "title": "Intermediate CA Issuer Type",
+                            "enum": [
+                                "Issuer",
+                                "ClusterIssuer"
+                            ]
+                        },
+                        "enabled": {
+                            "type": "boolean",
+                            "title": "Enable Intermediate CA Issuer",
+                            "description": "Whether to create this issuer"
+                        },
+                        "namespace": {
+                            "type": "string",
+                            "title": "Namespace",
+                            "description": "Namespace for Issuer type (ignored for ClusterIssuer)"
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "additionalProperties": false
+        },
+        "rootCA": {
+            "type": "object",
+            "title": "Root CA Configuration",
+            "required": [
+                "name",
+                "secretName",
+                "duration",
+                "renewBefore",
+                "commonName",
+                "organization",
+                "country"
+            ],
+            "properties": {
+                "namespace": {
+                    "type": "string",
+                    "title": "Namespace",
+                    "description": "Namespace for the certificate (defaults to Release namespace)",
+                    "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$"
+                },
+                "name": {
+                    "type": "string",
+                    "title": "Root CA Certificate Name",
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                },
+                "secretName": {
+                    "type": "string",
+                    "title": "Root CA Secret Name",
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                },
+                "duration": {
+                    "type": "string",
+                    "title": "Root CA Duration",
+                    "pattern": "^[0-9]+[hmd]$"
+                },
+                "renewBefore": {
+                    "type": "string",
+                    "title": "Root CA Renewal Time",
+                    "pattern": "^[0-9]+[hmd]$"
+                },
+                "commonName": {
+                    "type": "string",
+                    "title": "Root CA Common Name",
+                    "minLength": 1,
+                    "maxLength": 64
+                },
+                "organization": {
+                    "type": "string",
+                    "title": "Organization Name",
+                    "minLength": 1,
+                    "maxLength": 64
+                },
+                "country": {
+                    "type": "string",
+                    "title": "Country Code",
+                    "pattern": "^[A-Z]{2}$"
+                }
+            },
+            "additionalProperties": false
+        },
+        "intermediateCA": {
+            "type": "object",
+            "title": "Intermediate CA Configuration",
+            "required": [
+                "name",
+                "secretName",
+                "duration",
+                "renewBefore",
+                "commonName",
+                "organization",
+                "country"
+            ],
+            "properties": {
+                "namespace": {
+                    "type": "string",
+                    "title": "Namespace",
+                    "description": "Namespace for the certificate (defaults to Release namespace)",
+                    "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?)?$"
+                },
+                "name": {
+                    "type": "string",
+                    "title": "Intermediate CA Certificate Name",
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                },
+                "secretName": {
+                    "type": "string",
+                    "title": "Intermediate CA Secret Name",
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                },
+                "duration": {
+                    "type": "string",
+                    "title": "Intermediate CA Duration",
+                    "pattern": "^[0-9]+[hmd]$"
+                },
+                "renewBefore": {
+                    "type": "string",
+                    "title": "Intermediate CA Renewal Time",
+                    "pattern": "^[0-9]+[hmd]$"
+                },
+                "commonName": {
+                    "type": "string",
+                    "title": "Intermediate CA Common Name",
+                    "minLength": 1,
+                    "maxLength": 64
+                },
+                "organization": {
+                    "type": "string",
+                    "title": "Organization Name",
+                    "minLength": 1,
+                    "maxLength": 64
+                },
+                "country": {
+                    "type": "string",
+                    "title": "Country Code",
+                    "pattern": "^[A-Z]{2}$"
+                }
+            },
+            "additionalProperties": false
+        },
+        "gatewayCert": {
+            "type": "object",
+            "title": "Gateway Certificate Configuration",
+            "required": [
+                "enabled",
+                "name",
+                "secretName",
+                "duration",
+                "renewBefore",
+                "dnsNames",
+                "organization",
+                "country"
+            ],
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "title": "Enable Gateway Certificate",
+                    "description": "Whether to create the gateway certificate"
+                },
+                "name": {
+                    "type": "string",
+                    "title": "Gateway Certificate Name",
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                },
+                "secretName": {
+                    "type": "string",
+                    "title": "Gateway Certificate Secret Name",
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                },
+                "duration": {
+                    "type": "string",
+                    "title": "Gateway Certificate Duration",
+                    "pattern": "^[0-9]+[hmd]$"
+                },
+                "renewBefore": {
+                    "type": "string",
+                    "title": "Gateway Certificate Renewal Time",
+                    "pattern": "^[0-9]+[hmd]$"
+                },
+                "dnsNames": {
+                    "type": "array",
+                    "title": "DNS Names",
+                    "items": {
+                        "type": "string",
+                        "title": "DNS Name",
+                        "pattern": "^[a-zA-Z0-9*.-]+$"
+                    },
+                    "minItems": 1
+                },
+                "organization": {
+                    "type": "string",
+                    "title": "Organization Name",
+                    "minLength": 1,
+                    "maxLength": 64
+                },
+                "country": {
+                    "type": "string",
+                    "title": "Country Code",
+                    "pattern": "^[A-Z]{2}$"
+                }
+            },
+            "additionalProperties": false
+        }
+    },
+    "additionalProperties": false
+}

@@ -1,0 +1,18 @@
+tempo:
+  traces:
+    otlp:
+      grpc:
+        enabled: true
+      http:
+        enabled: true
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+  server:
+    http_listen_port: 3200
+  retention: 24h
+  persistence:
+    enabled: true
+    size: 2Gi
