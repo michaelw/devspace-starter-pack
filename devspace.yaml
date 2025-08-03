@@ -393,11 +393,17 @@ hooks:
         app.kubernetes.io/instance: trust-manager
     events: ["after:deploy:trust-manager"]
 
+  - name: delete-etcd-pvc-hook
+    command: |
+      echo >&2 "I: Deleting etcd PVC..."
+      kubectl -n external-dns delete pvc data-etcd-0 || true
+    events: ["after:purge:etcd"]
+
 pipelines:
   deploy:
     run: |-
       PHASES=(
-        "gateway-api-crds"
+        "etcd gateway-api-crds"
         "cert-manager metallb reflector"
         "cert-chain trust-manager"
         "istio-base"
