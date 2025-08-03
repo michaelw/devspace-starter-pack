@@ -6,7 +6,7 @@ coredns:
   etcdEndpoints: "http://etcd:2379"
 sources:
   - service
-  - ingress
+  - istio-virtualservice
   - gateway-httproute
   - gateway-grpcroute
   # experimental

@@ -1,0 +1,24 @@
+---
+# Certificate for Istio Gateway
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: istio-gateway-cert
+  namespace: istio-ingress
+spec:
+  secretName: istio-gateway-tls-secret
+  issuerRef:
+    name: gateway-ca-issuer
+    kind: Issuer
+  commonName: "*.istio.kube"
+  dnsNames:
+  - "*.istio.kube"
+  duration: 2160h  # 3 months
+  renewBefore: 168h  # 1 week before expiry
+  subject:
+    organizations:
+    - "Local Development"
+    organizationalUnits:
+    - "Istio Gateway"
+  usages:
+  - server auth

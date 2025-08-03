@@ -94,6 +94,19 @@ profiles:
               version: ${ISTIO_CHART_VERSION}
               repo: https://istio-release.storage.googleapis.com/charts
 
+        istio-ingress-gateway:
+          namespace: istio-ingress
+          helm:
+            chart:
+              name: gateway
+              version: ${ISTIO_CHART_VERSION}
+              repo: https://istio-release.storage.googleapis.com/charts
+            values:
+              service:
+                type: LoadBalancer
+              labels:
+                istio: ingressgateway
+
         gateway-api-crds:
           namespace: istio-ingress
           kubectl:
@@ -106,6 +119,14 @@ profiles:
           kubectl:
             manifests:
               - ./manifests/gateway.yaml
+
+        istio-gateway:
+          namespace: istio-ingress
+          kubectl:
+            manifests:
+              - ./manifests/istio-telemetry.yaml
+              - ./manifests/istio-gateway-cert.yaml
+              - ./manifests/istio-gateway.yaml
 
   - name: local-dns
     description: Local DNS integration for development
@@ -232,6 +253,7 @@ profiles:
             manifests:
               - https://raw.githubusercontent.com/istio/istio/release-1.26/samples/httpbin/httpbin.yaml
               - ./manifests/httpbin-routes.yaml
+              - ./manifests/httpbin-istio-vs.yaml
 
   - name: o11y
     description: Cluster Observability
@@ -408,6 +430,7 @@ pipelines:
         "cert-chain trust-manager"
         "istio-base"
         "istiod"
+        "istio-ingress-gateway"
       )
       run_dependencies --all
       ensure_pull_secrets --all

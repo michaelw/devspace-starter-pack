@@ -1,0 +1,33 @@
+---
+# Example VirtualService for httpbin using Istio Gateway
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: httpbin-istio
+  namespace: httpbin
+spec:
+  hosts:
+  - "httpbin.istio.kube"
+  gateways:
+  - istio-ingress/istio-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    headers:
+      request:
+        add:
+          x-istio-gateway: "true"
+      response:
+        add:
+          x-envoy-attempt-count: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%"
+          x-envoy-response-flags: "%RESPONSE_FLAGS%"
+    retries:
+      attempts: 9
+      perTryTimeout: 3s
+      retryOn: 5xx,gateway-error,connect-failure,refused-stream
+      retryRemoteLocalities: true
+    timeout: 30s
+    route:
+    - destination:
+        host: httpbin

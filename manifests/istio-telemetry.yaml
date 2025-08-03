@@ -1,0 +1,11 @@
+---
+# Enable access logging for all workloads
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: default-access-logging
+  namespace: istio-system
+spec:
+  accessLogging:
+  - providers:
+    - name: envoy

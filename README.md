@@ -15,7 +15,7 @@ devspace deploy
 
 This starter pack provides a complete local Kubernetes development infrastructure with:
 
-- **HTTP(S) Gateway**: Istio with Gateway API for traffic management
+- **HTTP(S) Gateway**: Istio with Gateway API and Ingress for traffic management
 - **Load Balancing**: MetalLB for LoadBalancer services on local clusters
 - **DNS Integration**: External DNS with CoreDNS for `.kube` domain resolution
 - **Certificate Management**: Complete CA chain with cert-manager and trust-manager
@@ -63,7 +63,7 @@ Deploy specific profiles:
 
 ```bash
 # Add databases
-devspace deploy --profile local-test,local-psql,local-redis
+devspace deploy --profile local-psql,local-redis
 ```
 
 ### 3. Verify Installation
@@ -128,8 +128,9 @@ devspace run import-root-ca
 
 ### HTTP(S) Gateway with Istio
 
-- `*.int.kube` autowired for certificates and DNS
-- Gateway API support for modern traffic management
+- `*.int.kube` autowired for Gateway API
+- `*.istio.kube` autowired for Istio Ingress
+- Gateway API and Istio Ingress support for traffic management
 - Automatic TLS termination with custom certificates
 - Traffic routing for microservices
 
