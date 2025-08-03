@@ -3,11 +3,13 @@
 A local Kubernetes development environment on macOS using [DevSpace](https://devspace.sh),
 featuring Gateway, observability, DNS integration, and certificate management.
 
-## TL:DR
+## TL;DR
 
 ```bash
 devspace deploy
 ```
+
+[![asciicast](https://asciinema.org/a/xQCFZrnnhBgVisgZg8HFtAviH.svg)](https://asciinema.org/a/xQCFZrnnhBgVisgZg8HFtAviH)
 
 ## Purpose
 
