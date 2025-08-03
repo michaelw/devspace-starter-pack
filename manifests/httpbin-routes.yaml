@@ -19,11 +19,11 @@ spec:
         type: PathPrefix
         value: /
     filters:
-    - type: RequestHeaderModifier
-      requestHeaderModifier:
+    - type: ResponseHeaderModifier
+      responseHeaderModifier:
         add:
-        - name: my-added-header
-          value: added-value
+        - name: x-gateway-api
+          value: "true"
     backendRefs:
     - name: httpbin
       port: 8000

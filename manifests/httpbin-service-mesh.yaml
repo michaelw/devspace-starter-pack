@@ -1,0 +1,23 @@
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: httpbin
+  namespace: httpbin
+spec:
+  hosts:
+  - httpbin.httpbin.svc.cluster.local
+  http:
+  - retries:
+      attempts: 4
+      perTryTimeout: 2s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+      retryRemoteLocalities: true
+    headers:
+      response:
+        add:
+          x-mesh-attempt-count: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%"
+          x-mesh-response-flags: "%RESPONSE_FLAGS%"
+    route:
+    - destination:
+        host: httpbin.httpbin.svc.cluster.local

@@ -251,9 +251,11 @@ profiles:
           namespace: httpbin
           kubectl:
             manifests:
+              - ./manifests/httpbin-namespace.yaml
               - https://raw.githubusercontent.com/istio/istio/release-1.26/samples/httpbin/httpbin.yaml
               - ./manifests/httpbin-routes.yaml
               - ./manifests/httpbin-istio-vs.yaml
+              - ./manifests/httpbin-service-mesh.yaml
 
   - name: o11y
     description: Cluster Observability

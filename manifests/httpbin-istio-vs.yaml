@@ -20,11 +20,11 @@ spec:
           x-istio-gateway: "true"
       response:
         add:
-          x-envoy-attempt-count: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%"
-          x-envoy-response-flags: "%RESPONSE_FLAGS%"
+          x-gateway-attempt-count: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%"
+          x-gateway-response-flags: "%RESPONSE_FLAGS%"
     retries:
-      attempts: 9
-      perTryTimeout: 3s
+      attempts: 4
+      perTryTimeout: 2s
       retryOn: 5xx,gateway-error,connect-failure,refused-stream
       retryRemoteLocalities: true
     timeout: 30s

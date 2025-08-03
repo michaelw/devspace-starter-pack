@@ -1,0 +1,11 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: httpbin
+  labels:
+    istio-injection: enabled
+  annotations:
+    # Optional: Additional Istio-related annotations
+    # config.istio.io/local-gateway-name: "httpbin-gateway"
+    # istio.io/rev: "default"  # Use if you have multiple Istio control plane revisions
