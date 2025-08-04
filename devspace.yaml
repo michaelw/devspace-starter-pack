@@ -374,7 +374,8 @@ profiles:
                 password: "elastic"
 
 hooks:
-  - name: docker-mac-connect-hook
+  - name: docker-mac-net-connect-hook
+    os: darwin
     command: |
       # check if docker-mac-net-connect is running, otherwise install and start it
       echo >&2 "I: Checking whether docker-mac-net-connect is installed..."
@@ -396,6 +397,7 @@ hooks:
     events: ["before:deploy:metallb"]
 
   - name: update-cluster-dns-hook
+    os: darwin
     command: devspace run update-cluster-dns
     events: ["after:deploy:cert-chain"]
 
@@ -453,6 +455,23 @@ pipelines:
       create_deployments --all --except ${PHASES[@]}
 
 commands:
+  docker-mac-net-connect:
+    description: Connect Docker for Mac to the cluster
+    section: network
+    command: |
+      # check if docker-mac-net-connect is running, otherwise install and start it
+      echo >&2 "I: Checking whether docker-mac-net-connect is installed..."
+      if ! sudo brew services list | grep -q docker-mac-net-connect; then
+        echo >&2 "I: Installing docker-mac-net-connect..."
+        if ! brew install chipmk/tap/docker-mac-net-connect; then
+          echo >&2 "E: Failed to install docker-mac-net-connect. Please check your Homebrew setup."
+          exit 1
+        fi
+      else
+        echo >&2 "I: docker-mac-net-connect is already installed."
+      fi
+      sudo brew services start chipmk/tap/docker-mac-net-connect
+
   update-cluster-dns:
     description: Make external cluster DNS available on the host
     section: network
