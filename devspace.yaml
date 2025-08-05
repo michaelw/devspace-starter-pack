@@ -422,7 +422,7 @@ hooks:
   - name: delete-etcd-pvc-hook
     command: |
       echo >&2 "I: Deleting etcd PVC..."
-      kubectl -n external-dns delete pvc data-etcd-0 || true
+      kubectl -n external-dns delete pvc data-etcd-0 --ignore-not-found
     events: ["after:purge:etcd"]
 
 pipelines:
