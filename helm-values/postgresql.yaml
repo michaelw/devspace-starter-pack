@@ -1,3 +1,12 @@
+# Required when overriding Bitnami's image repository to bitnamilegacy.
+global:
+  security:
+    allowInsecureImages: true
+
+image:
+  repository: bitnamilegacy/postgresql
+  tag: "16.6.0-debian-12-r2"
+
 auth:
   enablePostgresUser: true
   postgresPassword: postgres

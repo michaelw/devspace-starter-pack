@@ -1,4 +1,4 @@
-.PHONY: help install-precommit setup-dev lint test clean
+.PHONY: help install-precommit setup-dev lint test test-install clean
 
 help: ## Display this help message
 	@echo "Available targets:"
@@ -52,6 +52,9 @@ test: ## Run all tests
 			cd "$$chart" && helm unittest . && cd - > /dev/null; \
 		fi \
 	done
+
+test-install: ## Run live DevSpace install diagnostics
+	CGO_ENABLED=1 go test -count=1 -v -timeout 5m ./tests/install
 
 clean: ## Clean up generated files
 	@echo "Cleaning up..."
