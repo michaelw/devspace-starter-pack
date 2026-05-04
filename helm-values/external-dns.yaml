@@ -1,9 +1,8 @@
 domainFilters:
   - kube
-provider: coredns
+provider:
+  name: coredns
 policy: sync
-coredns:
-  etcdEndpoints: "http://etcd:2379"
 sources:
   - service
   - istio-virtualservice
@@ -13,7 +12,9 @@ sources:
   # - gateway-tlsroute
   # - gateway-tcproute
   # - gateway-udproute
-extraEnvVars:
+env:
+  - name: ETCD_URLS
+    value: http://etcd:2379
   - name: ETCD_USERNAME
     value: root
   - name: ETCD_PASSWORD
@@ -24,3 +25,5 @@ extraEnvVars:
 rbac:
   create: true
 logLevel: debug
+extraArgs:
+  coredns-prefix: /skydns/

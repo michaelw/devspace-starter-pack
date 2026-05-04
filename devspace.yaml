@@ -18,7 +18,9 @@ vars:
   # XXX pin all versions
 
   # XXX modify default bridge to carve out LB CIDR block, do not just alias it...
-  DOCKER_CIDR_PREFIX: "172.17.255"
+  DOCKER_CIDR_PREFIX:
+    command: ./scripts/docker-cidr-prefix.sh
+    default: "172.18.255"
 
 deployments:
   trust-bundle:
@@ -139,9 +141,12 @@ profiles:
           namespace: external-dns
           helm:
             chart:
-              name: etcd
-              repo: https://charts.bitnami.com/bitnami
+              name: oci://registry-1.docker.io/bitnamicharts/etcd
+              version: 12.0.18
             values:
+              image:
+                repository: bitnamilegacy/etcd
+                tag: "3.6.4-debian-12-r3"
               persistence:
                 enabled: true
               securityContext:
@@ -164,7 +169,9 @@ profiles:
           namespace: external-dns
           helm:
             chart:
-              name: oci://registry-1.docker.io/bitnamicharts/external-dns
+              name: external-dns
+              version: 1.21.1
+              repo: https://kubernetes-sigs.github.io/external-dns/
             valuesFiles:
               - ./helm-values/external-dns.yaml
 
@@ -330,12 +337,8 @@ profiles:
         postgres:
           helm:
             chart:
-              name: postgresql
+              name: oci://registry-1.docker.io/bitnamicharts/postgresql
               version: ${POSTGRES_CHART_VERSION}
-              repo: https://charts.bitnami.com/bitnami
-            values:
-              image:
-                tag: ${POSTGRES_VERSION}
             valuesFiles:
               - ./helm-values/postgresql.yaml
 
@@ -346,9 +349,8 @@ profiles:
         redis:
           helm:
             chart:
-              name: redis
+              name: oci://registry-1.docker.io/bitnamicharts/redis
               version: ${REDIS_CHART_VERSION}
-              repo: https://charts.bitnami.com/bitnami
             valuesFiles:
               - ./helm-values/redis.yaml
 
