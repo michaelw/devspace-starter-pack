@@ -8,7 +8,7 @@ image:
 
 alternateConfig:
   exporters:
-    otlp/jaeger:
+    otlp_grpc/jaeger:
       endpoint: jaeger.observability.svc.cluster.local:4317
       tls:
         insecure: true
@@ -39,7 +39,7 @@ alternateConfig:
           - memory_limiter
           - batch
         exporters:
-          - otlp/jaeger
+          - otlp_grpc/jaeger
 
 ports:
   otlp:
