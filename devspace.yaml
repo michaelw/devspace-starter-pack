@@ -15,6 +15,8 @@ vars:
   POSTGRES_VERSION: 16
   POSTGRES_CHART_VERSION: 16.7.20
   REDIS_CHART_VERSION: 21.2.12
+  OTEL_COLLECTOR_CHART_VERSION: 0.153.0
+  JAEGER_CHART_VERSION: 4.7.0
   # XXX pin all versions
 
   # XXX modify default bridge to carve out LB CIDR block, do not just alias it...
@@ -330,6 +332,36 @@ profiles:
             valuesFiles:
               - ./helm-values/grafana.yaml
 
+  - name: with-o11y
+    description: Local OpenTelemetry tracing stack
+    merge:
+      deployments:
+        jaeger:
+          namespace: observability
+          helm:
+            chart:
+              name: jaeger
+              version: ${JAEGER_CHART_VERSION}
+              repo: https://jaegertracing.github.io/helm-charts
+            valuesFiles:
+              - ./helm-values/jaeger.yaml
+
+        otel-collector:
+          namespace: observability
+          helm:
+            chart:
+              name: opentelemetry-collector
+              version: ${OTEL_COLLECTOR_CHART_VERSION}
+              repo: https://open-telemetry.github.io/opentelemetry-helm-charts
+            valuesFiles:
+              - ./helm-values/otel-collector.yaml
+
+        jaeger-route:
+          namespace: observability
+          kubectl:
+            manifests:
+              - ./manifests/jaeger-route.yaml
+
   - name: local-psql
     description: PostgreSQL for data storage
     merge:
@@ -520,3 +552,8 @@ commands:
       sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "${CERTFILE}"
 
       echo >&2 "I: Root CA certificate imported successfully to system keychain."
+
+  port-forward-otel:
+    description: Forward the local OpenTelemetry Collector OTLP ports
+    section: observability
+    command: kubectl -n observability port-forward service/otel-collector 4317:4317 4318:4318

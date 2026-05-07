@@ -69,6 +69,38 @@ func assertOptionalHTTPSRoute(t *testing.T) {
 	}
 }
 
+func assertOptionalTracingRoute(t *testing.T) {
+	t.Helper()
+
+	if !httpRouteInstalled(t, "observability", "jaeger") {
+		t.Fatal("observability/jaeger HTTPRoute is not installed")
+	}
+	if !cgoEnabled {
+		t.Fatal("Jaeger route validation on macOS requires CGO_ENABLED=1 so Go uses the system resolver for .kube names")
+	}
+
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		t.Fatalf("failed to load system cert pool: %v", err)
+	}
+
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12},
+		},
+	}
+	resp, err := client.Get("https://jaeger.int.kube/")
+	if err != nil {
+		t.Fatalf("Jaeger HTTPS route through gateway failed: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		t.Fatalf("Jaeger HTTPS route returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+}
+
 func assertScutilResolver(t *testing.T, domain, expectedIP string) {
 	t.Helper()
 
@@ -100,10 +132,16 @@ func assertScutilResolver(t *testing.T, domain, expectedIP string) {
 func httpbinRouteInstalled(t *testing.T) bool {
 	t.Helper()
 
-	output, err := runCommandE(defaultCommandTimeout, "kubectl", "get", "httproute", "http", "-n", "httpbin", "-o", "name")
+	return httpRouteInstalled(t, "httpbin", "http")
+}
+
+func httpRouteInstalled(t *testing.T, namespace, name string) bool {
+	t.Helper()
+
+	output, err := runCommandE(defaultCommandTimeout, "kubectl", "get", "httproute", name, "-n", namespace, "-o", "name")
 	if err != nil {
-		warningf(t, "optional httpbin route check skipped: %v", err)
+		warningf(t, "HTTPRoute %s/%s check skipped: %v", namespace, name, err)
 		return false
 	}
-	return strings.TrimSpace(output) == "httproute.gateway.networking.k8s.io/http" || strings.TrimSpace(output) == "httproute/http"
+	return strings.TrimSpace(output) == "httproute.gateway.networking.k8s.io/"+name || strings.TrimSpace(output) == "httproute/"+name
 }

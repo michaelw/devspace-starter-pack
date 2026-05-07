@@ -105,12 +105,18 @@ type service struct {
 		ClusterIP    string            `json:"clusterIP"`
 		Selector     map[string]string `json:"selector"`
 		ExternalName string            `json:"externalName"`
+		Ports        []servicePort     `json:"ports"`
 	} `json:"spec"`
 	Status struct {
 		LoadBalancer struct {
 			Ingress []loadBalancerIngress `json:"ingress"`
 		} `json:"loadBalancer"`
 	} `json:"status"`
+}
+
+type servicePort struct {
+	Name string `json:"name"`
+	Port int    `json:"port"`
 }
 
 type loadBalancerIngress struct {
@@ -283,6 +289,25 @@ func assertLoadBalancersAssigned(t *testing.T, namespaces []string) {
 		}
 	}
 	failWithList(t, "LoadBalancer services are not assigned", failures)
+}
+
+func assertServiceExposesPorts(t *testing.T, namespace, name string, expected map[string]int) {
+	t.Helper()
+
+	svc := kubectlJSON[service](t, "get", "service", name, "-n", namespace)
+	actual := map[string]int{}
+	for _, port := range svc.Spec.Ports {
+		actual[port.Name] = port.Port
+	}
+
+	var failures []string
+	for portName, portNumber := range expected {
+		if actual[portName] != portNumber {
+			failures = append(failures, fmt.Sprintf("%s port %s is %d, expected %d",
+				describeObject(namespace, "service", name), portName, actual[portName], portNumber))
+		}
+	}
+	failWithList(t, "service ports are not exposed", failures)
 }
 
 func requireServiceLoadBalancerIP(t *testing.T, namespace, name string) string {
