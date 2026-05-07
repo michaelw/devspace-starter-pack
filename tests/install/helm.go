@@ -30,3 +30,15 @@ func assertHelmReleasesDeployed(t *testing.T) {
 	}
 	failWithList(t, "Helm releases are not deployed", failures)
 }
+
+func helmReleaseInstalled(t *testing.T, namespace, name string) bool {
+	t.Helper()
+
+	releases := runJSON[[]helmRelease](t, "helm", "list", "-A", "-o", "json")
+	for _, release := range releases {
+		if release.Namespace == namespace && release.Name == name && release.Status == "deployed" {
+			return true
+		}
+	}
+	return false
+}

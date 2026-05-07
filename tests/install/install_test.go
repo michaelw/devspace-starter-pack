@@ -65,6 +65,28 @@ func TestDevspaceInstallDiagnostics(t *testing.T) {
 	t.Run("optional https route", func(t *testing.T) {
 		assertOptionalHTTPSRoute(t)
 	})
+
+	t.Run("optional tracing stack", func(t *testing.T) {
+		if !helmReleaseInstalled(t, "observability", "otel-collector") && !helmReleaseInstalled(t, "observability", "jaeger") {
+			t.Skip("optional with-o11y profile is not installed")
+		}
+		if !helmReleaseInstalled(t, "observability", "otel-collector") {
+			t.Fatal("observability/otel-collector Helm release is not deployed")
+		}
+		if !helmReleaseInstalled(t, "observability", "jaeger") {
+			t.Fatal("observability/jaeger Helm release is not deployed")
+		}
+
+		assertServiceExposesPorts(t, "observability", "otel-collector", map[string]int{
+			"otlp":      4317,
+			"otlp-http": 4318,
+		})
+		assertServiceExposesPorts(t, "observability", "jaeger", map[string]int{
+			"otlp-grpc":  4317,
+			"otlp-http":  4318,
+			"http-query": 16686,
+		})
+	})
 }
 
 func requiredTools() []string {

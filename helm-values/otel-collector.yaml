@@ -1,0 +1,74 @@
+fullnameOverride: otel-collector
+
+mode: deployment
+replicaCount: 1
+
+image:
+  repository: otel/opentelemetry-collector-k8s
+
+alternateConfig:
+  exporters:
+    otlp/jaeger:
+      endpoint: jaeger.observability.svc.cluster.local:4317
+      tls:
+        insecure: true
+  extensions:
+    health_check:
+      endpoint: ${env:MY_POD_IP}:13133
+  processors:
+    batch: {}
+    memory_limiter:
+      check_interval: 5s
+      limit_percentage: 80
+      spike_limit_percentage: 25
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: ${env:MY_POD_IP}:4317
+        http:
+          endpoint: ${env:MY_POD_IP}:4318
+  service:
+    extensions:
+      - health_check
+    pipelines:
+      traces:
+        receivers:
+          - otlp
+        processors:
+          - memory_limiter
+          - batch
+        exporters:
+          - otlp/jaeger
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+    appProtocol: grpc
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+    appProtocol: http
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+  metrics:
+    enabled: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
