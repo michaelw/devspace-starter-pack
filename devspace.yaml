@@ -356,6 +356,12 @@ profiles:
             valuesFiles:
               - ./helm-values/otel-collector.yaml
 
+        jaeger-route:
+          namespace: observability
+          kubectl:
+            manifests:
+              - ./manifests/jaeger-route.yaml
+
   - name: local-psql
     description: PostgreSQL for data storage
     merge:
@@ -546,11 +552,6 @@ commands:
       sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "${CERTFILE}"
 
       echo >&2 "I: Root CA certificate imported successfully to system keychain."
-
-  port-forward-traces:
-    description: Forward the local Jaeger trace UI
-    section: observability
-    command: kubectl -n observability port-forward service/jaeger 16686:16686
 
   port-forward-otel:
     description: Forward the local OpenTelemetry Collector OTLP ports

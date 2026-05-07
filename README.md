@@ -125,13 +125,10 @@ devspace run import-root-ca
 ### Observability Commands
 
 The tracing services are `ClusterIP` services by default. Service workloads should use the in-cluster
-collector DNS name directly; port-forwarding is only needed when accessing the Jaeger UI or collector
-from the macOS host.
+collector DNS name directly. The Jaeger UI is exposed through the shared local HTTPS gateway at
+`https://jaeger.int.kube`.
 
 ```bash
-# Forward Jaeger to http://localhost:16686
-devspace run port-forward-traces
-
 # Forward OTLP/gRPC and OTLP/HTTP for host-side trace smoke tests
 devspace run port-forward-otel
 ```
@@ -195,14 +192,8 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability.svc.cluster.loca
 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 ```
 
-Open the trace UI with:
-
-```bash
-devspace run port-forward-traces
-```
-
-Then visit `http://localhost:16686`. This port-forward is for host browser access only; in-cluster
-workloads export to `otel-collector.observability.svc.cluster.local` without port-forwarding.
+Open the trace UI at `https://jaeger.int.kube`. In-cluster workloads export to
+`otel-collector.observability.svc.cluster.local` without port-forwarding.
 
 For ext-authz workflows, run a request through the local gateway and inspect the resulting trace in Jaeger. A healthy trace should show inbound request or gateway trace context, an ext-authz check span, a token endpoint HTTP client span below the authorization path, and one shared trace ID across the request path.
 

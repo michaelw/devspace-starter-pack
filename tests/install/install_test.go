@@ -86,6 +86,7 @@ func TestDevspaceInstallDiagnostics(t *testing.T) {
 			"otlp-http":  4318,
 			"http-query": 16686,
 		})
+		assertOptionalTracingRoute(t)
 	})
 }
 

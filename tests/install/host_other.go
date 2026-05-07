@@ -22,3 +22,8 @@ func assertOptionalHTTPSRoute(t *testing.T) {
 	t.Helper()
 	t.Skip("optional HTTPS route checks are currently implemented only on macOS")
 }
+
+func assertOptionalTracingRoute(t *testing.T) {
+	t.Helper()
+	t.Skip("optional Jaeger HTTPS route checks are currently implemented only on macOS")
+}
