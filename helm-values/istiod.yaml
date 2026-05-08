@@ -1,0 +1,10 @@
+meshConfig:
+  enablePrometheusMerge: true
+  enableTracing: true
+  extensionProviders:
+    - name: otel-tracing
+      opentelemetry:
+        service: otel-collector.observability.svc.cluster.local
+        port: 4317
+        resource_detectors:
+          environment: {}

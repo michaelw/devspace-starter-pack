@@ -1,0 +1,160 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-kubernetes
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: Kubernetes
+data:
+  kubernetes-api-server.json: |-
+    {
+      "uid": "k8s-api-server",
+      "title": "Kubernetes API Server",
+      "tags": ["kubernetes", "local", "starter-pack"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "time": {"from": "now-1h", "to": "now"},
+      "templating": {"list": []},
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "API server targets down",
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "count(up{job=\"apiserver\"} == 0)"}]
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "API request rate",
+          "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "sum by (verb, code) (rate(apiserver_request_total[5m]))"}]
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "API request p99 latency",
+          "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "histogram_quantile(0.99, sum by (verb, resource, le) (rate(apiserver_request_duration_seconds_bucket{verb!=\"WATCH\"}[5m])))"}],
+          "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}
+        },
+        {
+          "id": 4,
+          "type": "table",
+          "title": "Recent API error rates",
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "topk(20, sum by (resource, verb, code) (rate(apiserver_request_total{code=~\"5..\"}[5m])))", "format": "table", "instant": true}]
+        }
+      ]
+    }
+  kubernetes-compute-resources.json: |-
+    {
+      "uid": "k8s-compute-resources",
+      "title": "Kubernetes Compute Resources",
+      "tags": ["kubernetes", "local", "starter-pack"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "time": {"from": "now-1h", "to": "now"},
+      "templating": {"list": []},
+      "panels": [
+        {
+          "id": 1,
+          "type": "timeseries",
+          "title": "Namespace CPU",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "sum by (namespace) (rate(container_cpu_usage_seconds_total{container!=\"\", image!=\"\"}[5m]))"}],
+          "fieldConfig": {"defaults": {"unit": "cores"}, "overrides": []}
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "Namespace memory working set",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "sum by (namespace) (container_memory_working_set_bytes{container!=\"\", image!=\"\"})"}],
+          "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []}
+        },
+        {
+          "id": 3,
+          "type": "table",
+          "title": "Top pod CPU",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "topk(20, sum by (namespace, pod) (rate(container_cpu_usage_seconds_total{container!=\"\", image!=\"\"}[5m])))", "format": "table", "instant": true}]
+        },
+        {
+          "id": 4,
+          "type": "table",
+          "title": "Top pod memory",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "topk(20, sum by (namespace, pod) (container_memory_working_set_bytes{container!=\"\", image!=\"\"}))", "format": "table", "instant": true}]
+        }
+      ]
+    }
+  kubernetes-kubelet-runtime-health.json: |-
+    {
+      "uid": "k8s-kubelet-runtime-health",
+      "title": "Kubernetes Kubelet / Runtime Health",
+      "tags": ["kubernetes", "kubelet", "local", "starter-pack"],
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "time": {"from": "now-1h", "to": "now"},
+      "templating": {"list": []},
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Kubelet targets down",
+          "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "count(up{job=\"kubelet\"} == 0)"}]
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "Running pods by node",
+          "gridPos": {"h": 8, "w": 9, "x": 6, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "sum by (node) (kubelet_running_pods)"}]
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "Running containers by node",
+          "gridPos": {"h": 8, "w": 9, "x": 15, "y": 0},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "sum by (node) (kubelet_running_containers)"}]
+        },
+        {
+          "id": 4,
+          "type": "table",
+          "title": "Runtime operation errors",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "topk(20, sum by (instance, operation_type) (rate(kubelet_runtime_operations_errors_total[5m])))", "format": "table", "instant": true}]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "Runtime operation p95 latency",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "targets": [{"refId": "A", "expr": "histogram_quantile(0.95, sum by (operation_type, le) (rate(kubelet_runtime_operations_duration_seconds_bucket[5m])))"}],
+          "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []}
+        }
+      ]
+    }
