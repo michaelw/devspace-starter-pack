@@ -3,32 +3,39 @@ adminPassword: admin
 
 replicas: 1
 
-datasources:
-  datasources.yaml:
-    apiVersion: 1
-    datasources:
-      - name: Prometheus
-        type: prometheus
-        url: http://prometheus.observability.svc.cluster.local:9090
-        access: proxy
-        isDefault: true
-      - name: Loki
-        type: loki
-        url: http://loki.observability.svc.cluster.local:3100
-        access: proxy
-      - name: Tempo
-        type: tempo
-        url: http://tempo.observability.svc.cluster.local:3200
-        access: proxy
-        jsonData:
-          tracesToLogs:
-            datasourceUid: 'loki'
-            filterByTraceID: true
-            filterBySpanID: false
-            tags:
-              - job
-          lokiSearch:
-            datasourceUid: 'loki'
+grafana.ini:
+  server:
+    domain: grafana.int.kube
+    root_url: https://grafana.int.kube/
+  dashboards:
+    default_home_dashboard_path: /var/lib/grafana/home-dashboard/candidate-kubernetes-overview.json
+
+extraConfigmapMounts:
+  - name: home-dashboard
+    mountPath: /var/lib/grafana/home-dashboard/candidate-kubernetes-overview.json
+    subPath: candidate-kubernetes-overview.json
+    configMap: grafana-dashboards-candidates
+    readOnly: true
+    optional: false
+
+sidecar:
+  dashboards:
+    enabled: true
+    env:
+      HEALTH_PORT: "8083"
+    label: grafana_dashboard
+    labelValue: "1"
+    searchNamespace: ALL
+    folderAnnotation: grafana_folder
+    provider:
+      allowUiUpdates: false
+  datasources:
+    enabled: true
+    env:
+      HEALTH_PORT: "8081"
+    label: grafana_datasource
+    labelValue: "1"
+    searchNamespace: ALL
 
 service:
   type: ClusterIP
@@ -37,3 +44,6 @@ service:
 persistence:
   enabled: true
   size: 2Gi
+
+initChownData:
+  enabled: false

@@ -97,6 +97,8 @@ profiles:
               name: istiod
               version: ${ISTIO_CHART_VERSION}
               repo: https://istio-release.storage.googleapis.com/charts
+            valuesFiles:
+              - ./helm-values/istiod.yaml
 
         istio-ingress-gateway:
           namespace: istio-ingress
@@ -266,8 +268,8 @@ profiles:
               - ./manifests/httpbin-istio-vs.yaml
               - ./manifests/httpbin-service-mesh.yaml
 
-  - name: o11y
-    description: Cluster Observability
+  - name: with-o11y
+    description: Cluster observability with Prometheus metrics and lightweight tracing
     activation:
       - vars:
           DEVSPACE_CONTEXT: "^(kind|docker-desktop|minikube|rancher-desktop|microk8s)$"
@@ -290,9 +292,87 @@ profiles:
             values:
               args:
                 - --kubelet-insecure-tls
+        jaeger:
+          namespace: observability
+          helm:
+            chart:
+              name: jaeger
+              version: ${JAEGER_CHART_VERSION}
+              repo: https://jaegertracing.github.io/helm-charts
+            valuesFiles:
+              - ./helm-values/jaeger.yaml
+
+        otel-collector:
+          namespace: observability
+          helm:
+            chart:
+              name: opentelemetry-collector
+              version: ${OTEL_COLLECTOR_CHART_VERSION}
+              repo: https://open-telemetry.github.io/opentelemetry-helm-charts
+            valuesFiles:
+              - ./helm-values/otel-collector.yaml
+
+        jaeger-route:
+          namespace: observability
+          kubectl:
+            manifests:
+              - ./manifests/jaeger-route.yaml
+
+        istio-metrics-monitors:
+          namespace: observability
+          kubectl:
+            manifests:
+              - ./manifests/istio-metrics-monitors.yaml
+
+  - name: o11y-grafana
+    description: Grafana UI for local observability
+    merge:
+      deployments:
+        grafana-dashboards-candidates:
+          namespace: observability
+          kubectl:
+            manifests:
+              - ./manifests/grafana-dashboards-candidates.yaml
+            applyArgs:
+              - --server-side
+
+        grafana:
+          namespace: observability
+          helm:
+            chart:
+              name: grafana
+              repo: https://grafana.github.io/helm-charts
+            valuesFiles:
+              - ./helm-values/grafana.yaml
+
+        grafana-route:
+          namespace: observability
+          kubectl:
+            manifests:
+              - ./manifests/grafana-route.yaml
+
+        grafana-datasource-prometheus:
+          namespace: observability
+          kubectl:
+            manifests:
+              - ./manifests/grafana-datasource-prometheus.yaml
+
+        grafana-dashboards-kubernetes:
+          namespace: observability
+          kubectl:
+            manifests:
+              - ./manifests/grafana-dashboards-kubernetes.yaml
+
+        grafana-dashboards-istio:
+          namespace: observability
+          kubectl:
+            manifests:
+              - ./manifests/grafana-dashboards-istio.yaml
+            applyArgs:
+              - --server-side
 
   - name: o11y-addons
-    description: Observability addons (non-essential)
+    description: Observability addons for logs and Grafana trace exploration
     merge:
       deployments:
         alloy:
@@ -323,44 +403,11 @@ profiles:
             valuesFiles:
               - ./helm-values/tempo.yaml
 
-        grafana:
-          namespace: observability
-          helm:
-            chart:
-              name: grafana
-              repo: https://grafana.github.io/helm-charts
-            valuesFiles:
-              - ./helm-values/grafana.yaml
-
-  - name: with-o11y
-    description: Local OpenTelemetry tracing stack
-    merge:
-      deployments:
-        jaeger:
-          namespace: observability
-          helm:
-            chart:
-              name: jaeger
-              version: ${JAEGER_CHART_VERSION}
-              repo: https://jaegertracing.github.io/helm-charts
-            valuesFiles:
-              - ./helm-values/jaeger.yaml
-
-        otel-collector:
-          namespace: observability
-          helm:
-            chart:
-              name: opentelemetry-collector
-              version: ${OTEL_COLLECTOR_CHART_VERSION}
-              repo: https://open-telemetry.github.io/opentelemetry-helm-charts
-            valuesFiles:
-              - ./helm-values/otel-collector.yaml
-
-        jaeger-route:
+        grafana-datasources-addons:
           namespace: observability
           kubectl:
             manifests:
-              - ./manifests/jaeger-route.yaml
+              - ./manifests/grafana-datasources-addons.yaml
 
   - name: local-psql
     description: PostgreSQL for data storage

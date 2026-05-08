@@ -101,6 +101,38 @@ func assertOptionalTracingRoute(t *testing.T) {
 	}
 }
 
+func assertOptionalGrafanaRoute(t *testing.T) {
+	t.Helper()
+
+	if !httpRouteInstalled(t, "observability", "grafana") {
+		t.Fatal("observability/grafana HTTPRoute is not installed")
+	}
+	if !cgoEnabled {
+		t.Fatal("Grafana route validation on macOS requires CGO_ENABLED=1 so Go uses the system resolver for .kube names")
+	}
+
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		t.Fatalf("failed to load system cert pool: %v", err)
+	}
+
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12},
+		},
+	}
+	resp, err := client.Get("https://grafana.int.kube/login")
+	if err != nil {
+		t.Fatalf("Grafana HTTPS route through gateway failed: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		t.Fatalf("Grafana HTTPS route returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+}
+
 func assertScutilResolver(t *testing.T, domain, expectedIP string) {
 	t.Helper()
 
