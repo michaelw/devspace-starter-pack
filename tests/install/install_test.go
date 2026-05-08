@@ -68,7 +68,7 @@ func TestDevspaceInstallDiagnostics(t *testing.T) {
 
 	t.Run("optional tracing stack", func(t *testing.T) {
 		if !helmReleaseInstalled(t, "observability", "otel-collector") && !helmReleaseInstalled(t, "observability", "jaeger") {
-			t.Skip("optional with-o11y profile is not installed")
+			t.Skip("with-o11y profile is not installed")
 		}
 		if !helmReleaseInstalled(t, "observability", "otel-collector") {
 			t.Fatal("observability/otel-collector Helm release is not deployed")
@@ -80,13 +80,49 @@ func TestDevspaceInstallDiagnostics(t *testing.T) {
 		assertServiceExposesPorts(t, "observability", "otel-collector", map[string]int{
 			"otlp":      4317,
 			"otlp-http": 4318,
+			"metrics":   8888,
 		})
 		assertServiceExposesPorts(t, "observability", "jaeger", map[string]int{
 			"otlp-grpc":  4317,
 			"otlp-http":  4318,
 			"http-query": 16686,
 		})
+		assertServiceMonitorInstalled(t, "observability", "otel-collector")
+		assertServiceMonitorInstalled(t, "observability", "istiod")
+		assertPodMonitorInstalled(t, "observability", "istio-gateway-api-gateway")
+		assertPodMonitorInstalled(t, "observability", "istio-ingress-gateway")
+		assertPrometheusRemoteWriteReceiverEnabled(t, "observability", "prometheus-kube-prometheus-prometheus")
 		assertOptionalTracingRoute(t)
+	})
+
+	t.Run("optional grafana", func(t *testing.T) {
+		if !helmReleaseInstalled(t, "observability", "grafana") {
+			t.Skip("o11y-grafana profile is not installed")
+		}
+
+		assertServiceExposesPorts(t, "observability", "grafana", map[string]int{
+			"service": 3000,
+		})
+		assertConfigMapInstalled(t, "observability", "grafana-datasource-prometheus")
+		assertConfigMapInstalled(t, "observability", "grafana-dashboards-kubernetes")
+		assertConfigMapInstalled(t, "observability", "grafana-dashboards-candidates")
+		assertConfigMapInstalled(t, "observability", "grafana-dashboards-istio")
+		assertOptionalGrafanaRoute(t)
+	})
+
+	t.Run("optional observability addons", func(t *testing.T) {
+		if !helmReleaseInstalled(t, "observability", "loki") &&
+			!helmReleaseInstalled(t, "observability", "tempo") &&
+			!helmReleaseInstalled(t, "observability", "alloy") {
+			t.Skip("o11y-addons profile is not installed")
+		}
+
+		for _, release := range []string{"loki", "tempo", "alloy"} {
+			if !helmReleaseInstalled(t, "observability", release) {
+				t.Fatalf("observability/%s Helm release is not deployed", release)
+			}
+		}
+		assertConfigMapInstalled(t, "observability", "grafana-datasources-addons")
 	})
 }
 

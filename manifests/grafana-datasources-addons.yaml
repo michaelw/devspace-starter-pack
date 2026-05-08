@@ -1,0 +1,32 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources-addons
+  labels:
+    grafana_datasource: "1"
+data:
+  addons.yaml: |-
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        uid: loki
+        type: loki
+        url: http://loki.observability.svc.cluster.local:3100
+        access: proxy
+        editable: true
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        url: http://tempo.observability.svc.cluster.local:3200
+        access: proxy
+        editable: true
+        jsonData:
+          tracesToLogs:
+            datasourceUid: loki
+            filterByTraceID: true
+            filterBySpanID: false
+            tags:
+              - job
+          lokiSearch:
+            datasourceUid: loki

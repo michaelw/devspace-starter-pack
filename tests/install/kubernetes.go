@@ -166,6 +166,10 @@ type secret struct {
 	Data map[string]string `json:"data"`
 }
 
+type configMap struct {
+	Data map[string]string `json:"data"`
+}
+
 func assertWorkloadsReady(t *testing.T, namespaces []string) {
 	t.Helper()
 
@@ -308,6 +312,53 @@ func assertServiceExposesPorts(t *testing.T, namespace, name string, expected ma
 		}
 	}
 	failWithList(t, "service ports are not exposed", failures)
+}
+
+func assertConfigMapInstalled(t *testing.T, namespace, name string) {
+	t.Helper()
+
+	cm := kubectlJSON[configMap](t, "get", "configmap", name, "-n", namespace)
+	if len(cm.Data) == 0 {
+		t.Fatalf("%s has no data", describeObject(namespace, "configmap", name))
+	}
+}
+
+func assertServiceMonitorInstalled(t *testing.T, namespace, name string) {
+	t.Helper()
+
+	output, err := runCommandE(defaultCommandTimeout, "kubectl", "get", "servicemonitor", name, "-n", namespace, "-o", "name")
+	if err != nil {
+		t.Fatalf("ServiceMonitor %s/%s is not installed: %v", namespace, name, err)
+	}
+	got := strings.TrimSpace(output)
+	if got != "servicemonitor.monitoring.coreos.com/"+name && got != "servicemonitor/"+name {
+		t.Fatalf("unexpected ServiceMonitor name for %s/%s: %s", namespace, name, got)
+	}
+}
+
+func assertPodMonitorInstalled(t *testing.T, namespace, name string) {
+	t.Helper()
+
+	output, err := runCommandE(defaultCommandTimeout, "kubectl", "get", "podmonitor", name, "-n", namespace, "-o", "name")
+	if err != nil {
+		t.Fatalf("PodMonitor %s/%s is not installed: %v", namespace, name, err)
+	}
+	got := strings.TrimSpace(output)
+	if got != "podmonitor.monitoring.coreos.com/"+name && got != "podmonitor/"+name {
+		t.Fatalf("unexpected PodMonitor name for %s/%s: %s", namespace, name, got)
+	}
+}
+
+func assertPrometheusRemoteWriteReceiverEnabled(t *testing.T, namespace, name string) {
+	t.Helper()
+
+	output, err := runCommandE(defaultCommandTimeout, "kubectl", "get", "prometheus", name, "-n", namespace, "-o", "jsonpath={.spec.enableRemoteWriteReceiver}")
+	if err != nil {
+		t.Fatalf("Prometheus %s/%s is not installed or does not expose remote write receiver status: %v", namespace, name, err)
+	}
+	if strings.TrimSpace(output) != "true" {
+		t.Fatalf("Prometheus %s/%s remote write receiver is not enabled: %q", namespace, name, output)
+	}
 }
 
 func requireServiceLoadBalancerIP(t *testing.T, namespace, name string) string {

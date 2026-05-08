@@ -4,7 +4,10 @@ mode: deployment
 replicaCount: 1
 
 image:
-  repository: otel/opentelemetry-collector-k8s
+  repository: otel/opentelemetry-collector-contrib
+
+command:
+  name: otelcol-contrib
 
 alternateConfig:
   exporters:
@@ -12,6 +15,14 @@ alternateConfig:
       endpoint: jaeger.observability.svc.cluster.local:4317
       tls:
         insecure: true
+    prometheusremotewrite:
+      endpoint: http://prometheus-kube-prometheus-prometheus.observability.svc.cluster.local:9090/api/v1/write
+      max_batch_request_parallelism: 1
+      remote_write_queue:
+        num_consumers: 1
+      resource_to_telemetry_conversion:
+        enabled: true
+        exclude_service_attributes: true
   extensions:
     health_check:
       endpoint: 0.0.0.0:13133
@@ -31,6 +42,16 @@ alternateConfig:
   service:
     extensions:
       - health_check
+    telemetry:
+      metrics:
+        readers:
+          - pull:
+              exporter:
+                prometheus:
+                  host: 0.0.0.0
+                  port: 8888
+                  without_type_suffix: true
+                  without_units: true
     pipelines:
       traces:
         receivers:
@@ -40,6 +61,14 @@ alternateConfig:
           - batch
         exporters:
           - otlp_grpc/jaeger
+      metrics:
+        receivers:
+          - otlp
+        processors:
+          - memory_limiter
+          - batch
+        exporters:
+          - prometheusremotewrite
 
 ports:
   otlp:
@@ -63,7 +92,13 @@ ports:
   zipkin:
     enabled: false
   metrics:
-    enabled: false
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP
+
+serviceMonitor:
+  enabled: true
 
 resources:
   requests:

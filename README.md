@@ -65,8 +65,11 @@ Deploy specific profiles:
 # Add databases
 devspace deploy --profile local-psql,local-redis
 
-# Add local OpenTelemetry tracing
-devspace deploy --profile with-o11y
+# Add Grafana
+devspace deploy --profile o11y-grafana
+
+# Add logs and Grafana trace backend addons
+devspace deploy --profile o11y-grafana,o11y-addons
 ```
 
 ### 3. Verify Installation
@@ -94,9 +97,9 @@ dns-sd -q ns.dns.kube
 | `local-certs` | Certificate management | cert-manager, trust-manager, reflector |
 | `local-aux` | Auxiliary services | Reloader |
 | `local-test` | Test applications | httpbin with routes |
-| `o11y` | Core observability | Prometheus, Grafana, metrics-server |
-| `o11y-addons` | Extended observability | Alloy, Loki, Tempo |
-| `with-o11y` | Local tracing for service workflows | OpenTelemetry Collector, Jaeger |
+| `with-o11y` | Core observability | Prometheus, metrics-server, OpenTelemetry Collector, Jaeger |
+| `o11y-grafana` | Grafana UI | Grafana, Grafana HTTPRoute, datasource/dashboard sidecars |
+| `o11y-addons` | Extended observability | Alloy, Loki, Tempo, Grafana datasource ConfigMaps |
 | `local-psql` | PostgreSQL database | PostgreSQL with persistence |
 | `local-redis` | Redis cache | Redis with persistence |
 | `local-es` | ElasticSearch | Single-node ElasticSearch |
@@ -126,7 +129,8 @@ devspace run import-root-ca
 
 The tracing services are `ClusterIP` services by default. Service workloads should use the in-cluster
 collector DNS name directly. The Jaeger UI is exposed through the shared local HTTPS gateway at
-`https://jaeger.int.kube`.
+`https://jaeger.int.kube`. Grafana is available at `https://grafana.int.kube` when the
+`o11y-grafana` profile is deployed.
 
 ```bash
 # Forward OTLP/gRPC and OTLP/HTTP for host-side trace smoke tests
@@ -165,19 +169,20 @@ devspace run port-forward-otel
 
 - **OpenTelemetry Collector**: Local OTLP/gRPC and OTLP/HTTP trace receiver for service repositories
 - **Jaeger**: Lightweight trace UI with transient in-memory storage
-- **Prometheus**: Optional metrics collection and alerting
-- **Grafana**: Optional visualization and dashboards
+- **Prometheus**: Default local metrics collection and alerting
+- **Grafana**: Optional visualization with default local cluster dashboards and dashboard provisioning
 - **Loki**: Optional log aggregation
 - **Tempo**: Optional distributed tracing backend
 - **Alloy**: Optional OpenTelemetry collection
 
-Deploy the local tracing stack when a service needs to verify instrumentation without production observability credentials:
+The default local deployment includes Prometheus and lightweight tracing. Deploy Grafana when a
+host-browser UI is needed:
 
 ```bash
-devspace deploy --profile with-o11y
+devspace deploy --profile o11y-grafana
 ```
 
-Service repositories can export traces to the collector with:
+Service repositories can export traces and metrics to the collector with:
 
 ```bash
 OTEL_SERVICE_NAME=<service-name>
@@ -193,9 +198,40 @@ OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 ```
 
 Open the trace UI at `https://jaeger.int.kube`. In-cluster workloads export to
-`otel-collector.observability.svc.cluster.local` without port-forwarding.
+`otel-collector.observability.svc.cluster.local` without port-forwarding. Grafana reads metrics from
+Prometheus, including OTLP metrics remote-written by the collector. The collector preserves resource
+attributes as metric labels for local querying, while keeping a single remote-write sender path for
+the in-cluster Prometheus receiver.
 
-For ext-authz workflows, run a request through the local gateway and inspect the resulting trace in Jaeger. A healthy trace should show inbound request or gateway trace context, an ext-authz check span, a token endpoint HTTP client span below the authorization path, and one shared trace ID across the request path.
+Istio gateway and control-plane metrics are scraped directly by Prometheus so the official Istio RED
+dashboards keep their upstream metric and label expectations. Istio proxy tracing is sent to the same
+OpenTelemetry Collector and Jaeger path with local-only 100% sampling.
+
+Open Grafana at `https://grafana.int.kube` and log in with `admin` / `admin`
+(the local-only credentials configured in `helm-values/grafana.yaml`).
+
+Deploy Loki, Alloy, and Tempo when logs or Grafana-backed trace exploration are needed:
+
+```bash
+devspace deploy --profile o11y-grafana,o11y-addons
+```
+
+Grafana discovers additional dashboards and datasources from Kubernetes objects:
+
+- Dashboards: create a ConfigMap or Secret with label `grafana_dashboard: "1"` and dashboard JSON data.
+- Datasources: create a ConfigMap or Secret with label `grafana_datasource: "1"` and Grafana provisioning YAML.
+- Optional dashboard folders: set annotation `grafana_folder` on the dashboard ConfigMap or Secret.
+- These objects can live in service repository namespaces; the Grafana sidecars watch all namespaces.
+
+The `o11y-grafana` profile installs starter dashboards in the `Kubernetes` folder for API server,
+compute resource, and kubelet/runtime health.
+
+It also installs upstream Grafana.com dashboards in the `Candidates` folder for comparison:
+`Kubernetes Overview` and `OpenTelemetry Collector`. `Kubernetes Overview` is configured as the
+Grafana home dashboard for the local instance.
+
+The `Istio` folder contains official Istio `1.26.2` dashboards for mesh, service, workload, and
+control-plane RED drilldowns.
 
 ### Helm Values
 
@@ -251,10 +287,11 @@ kubectl get ipaddresspools -n metallb-system
 
 1. **Deploy Infrastructure**: `devspace deploy --profile local-network,local-certs`
 2. **Add DNS** (optional): `devspace deploy --profile local-dns`
-3. **Add Tracing** (optional): `devspace deploy --profile with-o11y`
-4. **Add Metrics/Logs** (optional): `devspace deploy --profile o11y,o11y-addons`
-5. **Deploy Your Applications**: Use the configured Gateway and DNS
-6. **Access Services**: Via `*.kube` domains with automatic HTTPS
+3. **Use Metrics/Tracing**: included by default through `with-o11y` on local clusters
+4. **Add Grafana** (optional): `devspace deploy --profile o11y-grafana`
+5. **Add Logs/Tempo** (optional): `devspace deploy --profile o11y-grafana,o11y-addons`
+6. **Deploy Your Applications**: Use the configured Gateway and DNS
+7. **Access Services**: Via `*.kube` domains with automatic HTTPS
 
 ## Cleanup
 

@@ -9,11 +9,10 @@ grafana:
 
 prometheus:
   prometheusSpec:
+    enableRemoteWriteReceiver: true
     serviceMonitorSelectorNilUsesHelmValues: false
     serviceMonitorSelector: {}
     podMonitorSelector: {}
-    remoteWrite:
-      - url: http://alloy.observability.svc.cluster.local:12345/api/v1/remote_write # Optional if Alloy pushes
     retention: 6h
     storageSpec:
       volumeClaimTemplate:
