@@ -1,6 +1,10 @@
 meshConfig:
   enablePrometheusMerge: true
   enableTracing: true
+  defaultConfig:
+    proxyStatsMatcher:
+      inclusionRegexps:
+        - ".*ext_authz.*"
   extensionProviders:
     - name: otel-tracing
       opentelemetry:
