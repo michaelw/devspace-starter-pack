@@ -11,6 +11,11 @@ require:
 
 vars:
   ISTIO_CHART_VERSION: 1.26.2
+  GATEWAY_EXT_AUTHZ_PROVIDER_NAME: gateway-ext-authz-grpc
+  GATEWAY_EXT_AUTHZ_SERVICE_NAME: gateway-ext-authz
+  GATEWAY_EXT_AUTHZ_SERVICE_NAMESPACE: istio-ingress
+  GATEWAY_EXT_AUTHZ_SERVICE_PORT:
+    default: 3001
   METALLB_CHART_VERSION: v0.15.2
   POSTGRES_VERSION: 16
   POSTGRES_CHART_VERSION: 16.7.20
@@ -97,8 +102,43 @@ profiles:
               name: istiod
               version: ${ISTIO_CHART_VERSION}
               repo: https://istio-release.storage.googleapis.com/charts
-            valuesFiles:
-              - ./helm-values/istiod.yaml
+            values:
+              meshConfig:
+                enablePrometheusMerge: true
+                enableTracing: true
+                defaultConfig:
+                  proxyStatsMatcher:
+                    inclusionRegexps:
+                      - ".*ext_authz.*"
+                      - "cluster\\.outbound\\|${GATEWAY_EXT_AUTHZ_SERVICE_PORT}\\|\\|${GATEWAY_EXT_AUTHZ_SERVICE_NAME}\\.${GATEWAY_EXT_AUTHZ_SERVICE_NAMESPACE}\\.svc\\.cluster\\.local;.*"
+                extensionProviders:
+                  - name: otel-tracing
+                    opentelemetry:
+                      service: otel-collector.observability.svc.cluster.local
+                      port: 4317
+                      resource_detectors:
+                        environment: {}
+                  - name: ${GATEWAY_EXT_AUTHZ_PROVIDER_NAME}
+                    envoyExtAuthzGrpc:
+                      service: ${GATEWAY_EXT_AUTHZ_SERVICE_NAME}.${GATEWAY_EXT_AUTHZ_SERVICE_NAMESPACE}.svc.cluster.local
+                      port: 3001
+                      timeout: 1s
+                      includeRequestHeadersInCheck:
+                        - authorization
+                        - cookie
+                        - x-request-id
+                        - x-b3-traceid
+                        - x-b3-spanid
+                        - x-b3-parentspanid
+                        - x-b3-sampled
+                        - x-b3-flags
+                        - b3
+                        - traceparent
+                        - tracestate
+                      headersToUpstreamOnAllow:
+                        - authorization
+                      headersToDownstreamOnDeny:
+                        - www-authenticate
 
         istio-ingress-gateway:
           namespace: istio-ingress

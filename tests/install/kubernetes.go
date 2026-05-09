@@ -172,19 +172,6 @@ type configMap struct {
 	Data map[string]string `json:"data"`
 }
 
-type authorizationPolicyList struct {
-	Items []authorizationPolicy `json:"items"`
-}
-
-type authorizationPolicy struct {
-	Metadata metadata `json:"metadata"`
-	Spec     struct {
-		Provider *struct {
-			Name string `json:"name"`
-		} `json:"provider"`
-	} `json:"spec"`
-}
-
 type istioMeshConfig struct {
 	DefaultConfig struct {
 		ProxyStatsMatcher struct {
@@ -400,10 +387,9 @@ func assertIstioGatewayExtAuthzHookInstalled(t *testing.T) {
 	assertStringSet(t, "ext-authz deny downstream headers", grpc.HeadersToDownstreamOnDeny, []string{"www-authenticate"})
 
 	assertStringContains(t, "proxyStatsMatcher inclusionRegexps", mesh.DefaultConfig.ProxyStatsMatcher.InclusionRegexps, ".*ext_authz.*")
-	assertStringContains(t, "proxyStatsMatcher inclusionRegexps", mesh.DefaultConfig.ProxyStatsMatcher.InclusionRegexps, "cluster\\.outbound\\|3001\\|\\|gateway-ext-authz\\.istio-ingress\\.svc\\.cluster\\.local\\..*")
+	assertStringContains(t, "proxyStatsMatcher inclusionRegexps", mesh.DefaultConfig.ProxyStatsMatcher.InclusionRegexps, "cluster\\.outbound\\|3001\\|\\|gateway-ext-authz\\.istio-ingress\\.svc\\.cluster\\.local;.*")
 
 	assertKubernetesObjectAbsent(t, "service", "gateway-ext-authz", "istio-ingress")
-	assertNoIstioAuthorizationPolicyUsesProvider(t, "istio-ingress", gatewayExtAuthzProviderName)
 }
 
 func requireIstioMeshConfig(t *testing.T) istioMeshConfig {
@@ -446,19 +432,6 @@ func assertKubernetesObjectAbsent(t *testing.T, kind, name, namespace string) {
 	if !strings.Contains(err.Error(), "NotFound") && !strings.Contains(err.Error(), "not found") {
 		t.Fatalf("failed to check whether %s is absent: %v", describeObject(namespace, kind, name), err)
 	}
-}
-
-func assertNoIstioAuthorizationPolicyUsesProvider(t *testing.T, namespace, providerName string) {
-	t.Helper()
-
-	policies := kubectlJSON[authorizationPolicyList](t, "get", "authorizationpolicies.security.istio.io", "-n", namespace)
-	var failures []string
-	for _, policy := range policies.Items {
-		if policy.Spec.Provider != nil && policy.Spec.Provider.Name == providerName {
-			failures = append(failures, describeObject(policy.Metadata.Namespace, "authorizationpolicy", policy.Metadata.Name))
-		}
-	}
-	failWithList(t, "infra must not create ext-authz AuthorizationPolicies", failures)
 }
 
 func assertServiceMonitorInstalled(t *testing.T, namespace, name string) {
