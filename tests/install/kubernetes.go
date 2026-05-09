@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 type metadata struct {
@@ -170,6 +172,30 @@ type configMap struct {
 	Data map[string]string `json:"data"`
 }
 
+type istioMeshConfig struct {
+	DefaultConfig struct {
+		ProxyStatsMatcher struct {
+			InclusionRegexps []string `yaml:"inclusionRegexps"`
+		} `yaml:"proxyStatsMatcher"`
+	} `yaml:"defaultConfig"`
+	ExtensionProviders []istioExtensionProvider `yaml:"extensionProviders"`
+}
+
+type istioExtensionProvider struct {
+	Name              string `yaml:"name"`
+	OpenTelemetry     any    `yaml:"opentelemetry"`
+	EnvoyExtAuthzGRPC *struct {
+		Service                      string   `yaml:"service"`
+		Port                         int      `yaml:"port"`
+		Timeout                      string   `yaml:"timeout"`
+		IncludeRequestHeadersInCheck []string `yaml:"includeRequestHeadersInCheck"`
+		HeadersToUpstreamOnAllow     []string `yaml:"headersToUpstreamOnAllow"`
+		HeadersToDownstreamOnDeny    []string `yaml:"headersToDownstreamOnDeny"`
+	} `yaml:"envoyExtAuthzGrpc"`
+}
+
+const gatewayExtAuthzProviderName = "gateway-ext-authz-grpc"
+
 func assertWorkloadsReady(t *testing.T, namespaces []string) {
 	t.Helper()
 
@@ -323,6 +349,91 @@ func assertConfigMapInstalled(t *testing.T, namespace, name string) {
 	}
 }
 
+func assertIstioGatewayExtAuthzHookInstalled(t *testing.T) {
+	t.Helper()
+
+	mesh := requireIstioMeshConfig(t)
+	otelProvider := findIstioExtensionProvider(mesh, "otel-tracing")
+	if otelProvider == nil || otelProvider.OpenTelemetry == nil {
+		t.Fatal("Istio meshConfig is missing otel-tracing extension provider")
+	}
+
+	provider := findIstioExtensionProvider(mesh, gatewayExtAuthzProviderName)
+	if provider == nil {
+		t.Fatalf("Istio meshConfig is missing %s extension provider", gatewayExtAuthzProviderName)
+	}
+	if provider.EnvoyExtAuthzGRPC == nil {
+		t.Fatalf("Istio meshConfig provider %s is not an envoyExtAuthzGrpc provider", gatewayExtAuthzProviderName)
+	}
+
+	grpc := provider.EnvoyExtAuthzGRPC
+	assertEqual(t, "ext-authz service", grpc.Service, "gateway-ext-authz.istio-ingress.svc.cluster.local")
+	assertEqual(t, "ext-authz port", grpc.Port, 3001)
+	assertEqual(t, "ext-authz timeout", grpc.Timeout, "1s")
+	assertStringSet(t, "ext-authz check request headers", grpc.IncludeRequestHeadersInCheck, []string{
+		"authorization",
+		"cookie",
+		"x-request-id",
+		"x-b3-traceid",
+		"x-b3-spanid",
+		"x-b3-parentspanid",
+		"x-b3-sampled",
+		"x-b3-flags",
+		"b3",
+		"traceparent",
+		"tracestate",
+	})
+	assertStringSet(t, "ext-authz allow upstream headers", grpc.HeadersToUpstreamOnAllow, []string{"authorization"})
+	assertStringSet(t, "ext-authz deny downstream headers", grpc.HeadersToDownstreamOnDeny, []string{"www-authenticate"})
+
+	assertStringContains(t, "proxyStatsMatcher inclusionRegexps", mesh.DefaultConfig.ProxyStatsMatcher.InclusionRegexps, ".*ext_authz.*")
+	assertStringContains(t, "proxyStatsMatcher inclusionRegexps", mesh.DefaultConfig.ProxyStatsMatcher.InclusionRegexps, "cluster\\.outbound\\|3001\\|\\|gateway-ext-authz\\.istio-ingress\\.svc\\.cluster\\.local;.*")
+
+	assertKubernetesObjectAbsent(t, "service", "gateway-ext-authz", "istio-ingress")
+}
+
+func requireIstioMeshConfig(t *testing.T) istioMeshConfig {
+	t.Helper()
+
+	cm := kubectlJSON[configMap](t, "get", "configmap", "istio", "-n", "istio-system")
+	meshYAML := cm.Data["mesh"]
+	if meshYAML == "" {
+		t.Fatal("istio-system/configmap/istio is missing data key mesh")
+	}
+
+	var mesh istioMeshConfig
+	if err := yaml.Unmarshal([]byte(meshYAML), &mesh); err != nil {
+		t.Fatalf("failed to parse istio mesh config: %v\nmesh:\n%s", err, meshYAML)
+	}
+	return mesh
+}
+
+func findIstioExtensionProvider(mesh istioMeshConfig, name string) *istioExtensionProvider {
+	for i := range mesh.ExtensionProviders {
+		if mesh.ExtensionProviders[i].Name == name {
+			return &mesh.ExtensionProviders[i]
+		}
+	}
+	return nil
+}
+
+func assertKubernetesObjectAbsent(t *testing.T, kind, name, namespace string) {
+	t.Helper()
+
+	args := []string{"get", kind, name}
+	if namespace != "" {
+		args = append(args, "-n", namespace)
+	}
+	args = append(args, "-o", "name")
+	output, err := runCommandE(defaultCommandTimeout, "kubectl", args...)
+	if err == nil {
+		t.Fatalf("expected %s to be absent, but it exists: %s", describeObject(namespace, kind, name), strings.TrimSpace(output))
+	}
+	if !strings.Contains(err.Error(), "NotFound") && !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("failed to check whether %s is absent: %v", describeObject(namespace, kind, name), err)
+	}
+}
+
 func assertServiceMonitorInstalled(t *testing.T, namespace, name string) {
 	t.Helper()
 
@@ -359,6 +470,48 @@ func assertPrometheusRemoteWriteReceiverEnabled(t *testing.T, namespace, name st
 	if strings.TrimSpace(output) != "true" {
 		t.Fatalf("Prometheus %s/%s remote write receiver is not enabled: %q", namespace, name, output)
 	}
+}
+
+func assertEqual[T comparable](t *testing.T, name string, actual, expected T) {
+	t.Helper()
+	if actual != expected {
+		t.Fatalf("%s is %v, expected %v", name, actual, expected)
+	}
+}
+
+func assertStringContains(t *testing.T, name string, actual []string, expected string) {
+	t.Helper()
+	for _, value := range actual {
+		if value == expected {
+			return
+		}
+	}
+	t.Fatalf("%s does not contain %q; got %v", name, expected, actual)
+}
+
+func assertStringSet(t *testing.T, name string, actual, expected []string) {
+	t.Helper()
+	var failures []string
+	for _, value := range expected {
+		if !stringSliceContains(actual, value) {
+			failures = append(failures, fmt.Sprintf("missing %q", value))
+		}
+	}
+	for _, value := range actual {
+		if !stringSliceContains(expected, value) {
+			failures = append(failures, fmt.Sprintf("unexpected %q", value))
+		}
+	}
+	failWithList(t, name+" mismatch", failures)
+}
+
+func stringSliceContains(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func requireServiceLoadBalancerIP(t *testing.T, namespace, name string) string {

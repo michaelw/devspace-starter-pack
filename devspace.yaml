@@ -110,7 +110,7 @@ profiles:
                   proxyStatsMatcher:
                     inclusionRegexps:
                       - ".*ext_authz.*"
-                      - "cluster\\.outbound\\|${GATEWAY_EXT_AUTHZ_SERVICE_PORT}\\|\\|${GATEWAY_EXT_AUTHZ_SERVICE_NAME}\\.${GATEWAY_EXT_AUTHZ_SERVICE_NAMESPACE}\\.svc\\.cluster\\.local\\..*"
+                      - "cluster\\.outbound\\|${GATEWAY_EXT_AUTHZ_SERVICE_PORT}\\|\\|${GATEWAY_EXT_AUTHZ_SERVICE_NAME}\\.${GATEWAY_EXT_AUTHZ_SERVICE_NAMESPACE}\\.svc\\.cluster\\.local;.*"
                 extensionProviders:
                   - name: otel-tracing
                     opentelemetry:
@@ -121,7 +121,24 @@ profiles:
                   - name: ${GATEWAY_EXT_AUTHZ_PROVIDER_NAME}
                     envoyExtAuthzGrpc:
                       service: ${GATEWAY_EXT_AUTHZ_SERVICE_NAME}.${GATEWAY_EXT_AUTHZ_SERVICE_NAMESPACE}.svc.cluster.local
-                      port: ${GATEWAY_EXT_AUTHZ_SERVICE_PORT}
+                      port: 3001
+                      timeout: 1s
+                      includeRequestHeadersInCheck:
+                        - authorization
+                        - cookie
+                        - x-request-id
+                        - x-b3-traceid
+                        - x-b3-spanid
+                        - x-b3-parentspanid
+                        - x-b3-sampled
+                        - x-b3-flags
+                        - b3
+                        - traceparent
+                        - tracestate
+                      headersToUpstreamOnAllow:
+                        - authorization
+                      headersToDownstreamOnDeny:
+                        - www-authenticate
 
         istio-ingress-gateway:
           namespace: istio-ingress

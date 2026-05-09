@@ -153,6 +153,52 @@ devspace run port-forward-otel
 - Automatic TLS termination with custom certificates
 - Traffic routing for microservices
 
+The Istio mesh config defines an optional Gateway API external authorization provider named
+`gateway-ext-authz-grpc`. This is only a generic extension point: infra does not install an ext-authz
+backend, does not create a `gateway-ext-authz` Service, and does not create an AuthorizationPolicy.
+If no app installs an AuthorizationPolicy that uses the provider, the provider is inert.
+
+Apps that want gateway-level external authorization must install their own ext-authz backend, a
+Service alias named `gateway-ext-authz` in the `istio-ingress` namespace on port `3001`, and an
+AuthorizationPolicy targeting the Gateway API generated gateway workload:
+`gateway.networking.k8s.io/gateway-name=gateway`.
+
+Example app-side AuthorizationPolicy:
+
+```yaml
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: example-gateway-ext-authz
+  namespace: istio-ingress
+spec:
+  selector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: gateway
+  action: CUSTOM
+  provider:
+    name: gateway-ext-authz-grpc
+  rules:
+    - {}
+```
+
+Example app-side Service alias:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway-ext-authz
+  namespace: istio-ingress
+spec:
+  type: ExternalName
+  externalName: my-ext-authz.my-app-namespace.svc.cluster.local
+  ports:
+    - name: grpc
+      port: 3001
+      targetPort: 3001
+```
+
 ### Certificate Management
 
 - Complete CA chain (Cluster Root CA → Intermediate CA → Leaf certificates)
