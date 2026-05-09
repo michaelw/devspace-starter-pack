@@ -328,14 +328,6 @@ profiles:
     description: Grafana UI for local observability
     merge:
       deployments:
-        grafana-dashboards-candidates:
-          namespace: observability
-          kubectl:
-            manifests:
-              - ./manifests/grafana-dashboards-candidates.yaml
-            applyArgs:
-              - --server-side
-
         grafana:
           namespace: observability
           helm:
@@ -362,14 +354,6 @@ profiles:
           kubectl:
             manifests:
               - ./manifests/grafana-dashboards-kubernetes.yaml
-
-        grafana-dashboards-istio:
-          namespace: observability
-          kubectl:
-            manifests:
-              - ./manifests/grafana-dashboards-istio.yaml
-            applyArgs:
-              - --server-side
 
   - name: o11y-addons
     description: Observability addons for logs and Grafana trace exploration
@@ -534,6 +518,12 @@ pipelines:
         fi
       done
       create_deployments --all --except ${PHASES[@]}
+      if is_in "grafana" "$enabled"; then
+        # These dashboard ConfigMaps are too large for client-side apply's last-applied annotation.
+        # DevSpace's kubectl deploy path adds --force, which kubectl rejects with --server-side.
+        kubectl -n observability apply --server-side -f ./manifests/grafana-dashboards-candidates.yaml
+        kubectl -n observability apply --server-side -f ./manifests/grafana-dashboards-istio.yaml
+      fi
 
 commands:
   docker-mac-net-connect:
