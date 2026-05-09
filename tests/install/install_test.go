@@ -62,6 +62,10 @@ func TestDevspaceInstallDiagnostics(t *testing.T) {
 		assertRootCAImported(t)
 	})
 
+	t.Run("gateway ext-authz hook", func(t *testing.T) {
+		assertIstioGatewayExtAuthzHookInstalled(t)
+	})
+
 	t.Run("optional https route", func(t *testing.T) {
 		assertOptionalHTTPSRoute(t)
 	})
