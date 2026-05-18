@@ -535,11 +535,11 @@ pipelines:
     run: |-
       PHASES=(
         "etcd gateway-api-crds"
-        "cert-manager metallb reflector"
+        "cert-manager metallb reflector prometheus"
         "cert-chain trust-manager"
         "istio-base"
         "istiod"
-        "istio-ingress-gateway"
+        "istio-ingress-gateway istio-metrics-monitors"
       )
       run_dependencies --all
       ensure_pull_secrets --all
