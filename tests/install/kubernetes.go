@@ -2,6 +2,7 @@ package install_test
 
 import (
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
@@ -554,6 +555,29 @@ func assertCertManagerResourcesReady(t *testing.T) {
 func rootCAFingerprint(t *testing.T) string {
 	t.Helper()
 
+	cert := rootCACertificate(t)
+	sum := sha256.Sum256(cert.Raw)
+	return strings.ToUpper(hex.EncodeToString(sum[:]))
+}
+
+func rootCACertificate(t *testing.T) *x509.Certificate {
+	t.Helper()
+
+	pemBytes := rootCAPEM(t)
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		t.Fatal("root CA certificate data does not contain a PEM block")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("failed to parse root CA certificate: %v", err)
+	}
+	return cert
+}
+
+func rootCAPEM(t *testing.T) []byte {
+	t.Helper()
+
 	secret := kubectlJSON[secret](t, "get", "secret", rootCASecret, "-n", "cert-manager")
 	encoded := secret.Data["tls.crt"]
 	if encoded == "" {
@@ -564,13 +588,7 @@ func rootCAFingerprint(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("failed to base64-decode root CA certificate: %v", err)
 	}
-	block, _ := pem.Decode(pemBytes)
-	if block == nil {
-		t.Fatal("root CA certificate data does not contain a PEM block")
-	}
-
-	sum := sha256.Sum256(block.Bytes)
-	return strings.ToUpper(hex.EncodeToString(sum[:]))
+	return pemBytes
 }
 
 func desiredReplicas(replicas *int) int {
