@@ -1,4 +1,4 @@
-.PHONY: help install-precommit setup-dev lint test test-install clean
+.PHONY: help install-precommit setup-dev lint test test-install test-e2e smoke clean
 
 help: ## Display this help message
 	@echo "Available targets:"
@@ -55,6 +55,11 @@ test: ## Run all tests
 
 test-install: ## Run live DevSpace install diagnostics
 	CGO_ENABLED=1 go test -count=1 -v -timeout 5m ./tests/install
+
+test-e2e: ## Run full ephemeral-cluster DevSpace e2e validation
+	go run ./tests/e2e/cmd/smoke
+
+smoke: test-e2e ## Run expensive smoke validation
 
 clean: ## Clean up generated files
 	@echo "Cleaning up..."

@@ -88,6 +88,34 @@ dns-sd -q ns.dns.kube
 
 **NOTE**: on macOS, do not rely on `dig` for testing DNS resolution.
 
+### Ephemeral Smoke Validation
+
+Run the full advertised deploy path against a throwaway local cluster:
+
+```bash
+make smoke
+```
+
+This creates an ephemeral `kind` cluster with an isolated kubeconfig, runs `devspace deploy`, runs the
+live install diagnostics, and deletes the cluster. The direct e2e target is also available:
+
+```bash
+make test-e2e
+```
+
+Useful local overrides:
+
+```bash
+E2E_CLUSTER_NAME=my-smoke E2E_KEEP_CLUSTER=1 make smoke
+E2E_DEVSPACE_ARGS="--profile o11y-grafana" make smoke
+E2E_TIMEOUT=30m E2E_READY_TIMEOUT=10m make smoke
+```
+
+`E2E_CLUSTER_PROVIDER=kind` is the current default and only implemented provider. `vind` is reserved
+as a future provider name. Timeout knobs use Go duration syntax and include `E2E_TIMEOUT`,
+`E2E_CLUSTER_CREATE_WAIT`, `E2E_CLEANUP_TIMEOUT`, `E2E_READY_TIMEOUT`,
+`E2E_READY_REPORT_INTERVAL`, `E2E_DIAGNOSTIC_TIMEOUT`, and `E2E_TEST_TIMEOUT`.
+
 ## Available Profiles
 
 | Profile | Description | Components |

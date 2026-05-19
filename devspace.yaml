@@ -55,7 +55,7 @@ profiles:
     description: Network, Gateways, Ingress
     activation:
       - vars:
-          DEVSPACE_CONTEXT: "^(kind|docker-desktop|minikube|rancher-desktop|microk8s)$"
+          DEVSPACE_CONTEXT: "^(kind(?:-.+)?|docker-desktop|minikube|rancher-desktop|microk8s)$"
     merge:
       deployments:
         metallb:
@@ -178,7 +178,7 @@ profiles:
     description: Local DNS integration for development
     activation:
       - vars:
-          DEVSPACE_CONTEXT: "^(kind|docker-desktop|minikube|rancher-desktop|microk8s)$"
+          DEVSPACE_CONTEXT: "^(kind(?:-.+)?|docker-desktop|minikube|rancher-desktop|microk8s)$"
     merge:
       deployments:
         etcd:
@@ -223,7 +223,7 @@ profiles:
     description: Certificate Management
     activation:
       - vars:
-          DEVSPACE_CONTEXT: "^(kind|docker-desktop|minikube|rancher-desktop|microk8s)$"
+          DEVSPACE_CONTEXT: "^(kind(?:-.+)?|docker-desktop|minikube|rancher-desktop|microk8s)$"
     merge:
       deployments:
         cert-manager:
@@ -281,7 +281,7 @@ profiles:
     description: Auxiliary services
     activation:
       - vars:
-          DEVSPACE_CONTEXT: "^(kind|docker-desktop|minikube|rancher-desktop|microk8s)$"
+          DEVSPACE_CONTEXT: "^(kind(?:-.+)?|docker-desktop|minikube|rancher-desktop|microk8s)$"
     merge:
       deployments:
         reloader:
@@ -312,7 +312,7 @@ profiles:
     description: Cluster observability with Prometheus metrics and lightweight tracing
     activation:
       - vars:
-          DEVSPACE_CONTEXT: "^(kind|docker-desktop|minikube|rancher-desktop|microk8s)$"
+          DEVSPACE_CONTEXT: "^(kind(?:-.+)?|docker-desktop|minikube|rancher-desktop|microk8s)$"
     merge:
       deployments:
         prometheus:
@@ -501,14 +501,29 @@ hooks:
     silent: true
     events: ["before:deploy:metallb"]
 
-  - name: update-cluster-dns-hook
+  - name: update-cluster-dns-hook-darwin
     os: darwin
     command: devspace run update-cluster-dns
     events: ["after:deploy:cert-chain"]
 
-  - name: cert-chain-hook
+  - name: update-cluster-dns-hook-linux
+    os: linux
+    command: devspace run update-cluster-dns-linux
+    events: ["after:deploy:cert-chain"]
+
+  - name: cert-chain-hook-darwin
+    os: darwin
     command: |
       while ! devspace run import-root-ca; do
+        echo >&2 "I: Waiting for root CA to be available..."
+        sleep 5
+      done
+    events: ["after:deploy:cert-chain"]
+
+  - name: cert-chain-hook-linux
+    os: linux
+    command: |
+      while ! devspace run import-root-ca-linux; do
         echo >&2 "I: Waiting for root CA to be available..."
         sleep 5
       done
@@ -597,6 +612,21 @@ commands:
       quit
       EOF
 
+  update-cluster-dns-linux:
+    description: Make external cluster DNS available on a Linux host
+    section: network
+    command: |
+      DNS_IP="${DOCKER_CIDR_PREFIX}.254"
+      echo >&2 "I: Updating systemd-resolved DNS settings..."
+      LINK="$(ip route get "${DNS_IP}" | awk '{for (i = 1; i <= NF; i++) if ($i == "dev") {print $(i + 1); exit}}')"
+      if [ -z "${LINK}" ]; then
+        echo >&2 "E: Could not determine Linux route interface for ${DNS_IP}"
+        exit 1
+      fi
+      sudo resolvectl dns "${LINK}" "${DNS_IP}"
+      sudo resolvectl domain "${LINK}" "~kube"
+      sudo resolvectl flush-caches
+
   reset-cluster-dns:
     description: Reset DNS service
     section: network
@@ -607,6 +637,20 @@ commands:
       remove State:/Network/Service/kube/DNS
       quit
       EOF
+
+  reset-cluster-dns-linux:
+    description: Reset Linux systemd-resolved cluster DNS service
+    section: network
+    command: |
+      DNS_IP="${DOCKER_CIDR_PREFIX}.254"
+      echo >&2 "I: Resetting systemd-resolved DNS settings..."
+      LINK="$(ip route get "${DNS_IP}" | awk '{for (i = 1; i <= NF; i++) if ($i == "dev") {print $(i + 1); exit}}')"
+      if [ -z "${LINK}" ]; then
+        echo >&2 "E: Could not determine Linux route interface for ${DNS_IP}"
+        exit 1
+      fi
+      sudo resolvectl revert "${LINK}"
+      sudo resolvectl flush-caches
 
   import-root-ca:
     description: Import the root CA certificate of the cluster
@@ -629,6 +673,28 @@ commands:
       sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "${CERTFILE}"
 
       echo >&2 "I: Root CA certificate imported successfully to system keychain."
+
+  import-root-ca-linux:
+    description: Import the root CA certificate of the cluster into the Linux trust store
+    section: network
+    command: |
+      CERTFILE=$(mktemp -t cluster-root-ca.XXXXXX.crt)
+      # Ensure cleanup on exit
+      trap 'rm -f "${CERTFILE}"' EXIT
+
+      echo >&2 "I: Extracting Root CA certificate..."
+      kubectl get secret -n istio-ingress cluster-root-ca-secret -o jsonpath='{.data.tls\.crt}' | base64 -d > "${CERTFILE}"
+      if [ ! -s "${CERTFILE}" ]; then
+        echo >&2 "E: Failed to extract certificate or certificate is empty"
+        exit 1
+      fi
+      openssl x509 -in "${CERTFILE}" -subject -issuer -dates -noout
+
+      echo >&2 "I: Adding certificate to Linux trust store..."
+      sudo install -m 0644 "${CERTFILE}" /usr/local/share/ca-certificates/devspace-starter-pack-cluster-root-ca.crt
+      sudo update-ca-certificates
+
+      echo >&2 "I: Root CA certificate imported successfully to Linux trust store."
 
   port-forward-otel:
     description: Forward the local OpenTelemetry Collector OTLP ports

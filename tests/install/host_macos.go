@@ -3,13 +3,8 @@
 package install_test
 
 import (
-	"crypto/tls"
-	"crypto/x509"
-	"io"
-	"net/http"
 	"strings"
 	"testing"
-	"time"
 )
 
 func hostRequiredTools() []string {
@@ -47,26 +42,7 @@ func assertOptionalHTTPSRoute(t *testing.T) {
 		t.Fatal("HTTPS route validation on macOS requires CGO_ENABLED=1 so Go uses the system resolver for .kube names")
 	}
 
-	pool, err := x509.SystemCertPool()
-	if err != nil {
-		t.Fatalf("failed to load system cert pool: %v", err)
-	}
-
-	client := &http.Client{
-		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12},
-		},
-	}
-	resp, err := client.Get("https://httpbin.int.kube/get")
-	if err != nil {
-		t.Fatalf("HTTPS request through gateway failed: %v", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		t.Fatalf("HTTPS route returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
-	}
+	assertHTTPSGet(t, "HTTPS route", "https://httpbin.int.kube/get")
 }
 
 func assertOptionalTracingRoute(t *testing.T) {
@@ -79,26 +55,7 @@ func assertOptionalTracingRoute(t *testing.T) {
 		t.Fatal("Jaeger route validation on macOS requires CGO_ENABLED=1 so Go uses the system resolver for .kube names")
 	}
 
-	pool, err := x509.SystemCertPool()
-	if err != nil {
-		t.Fatalf("failed to load system cert pool: %v", err)
-	}
-
-	client := &http.Client{
-		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12},
-		},
-	}
-	resp, err := client.Get("https://jaeger.int.kube/")
-	if err != nil {
-		t.Fatalf("Jaeger HTTPS route through gateway failed: %v", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		t.Fatalf("Jaeger HTTPS route returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
-	}
+	assertHTTPSGet(t, "Jaeger HTTPS route", "https://jaeger.int.kube/")
 }
 
 func assertOptionalGrafanaRoute(t *testing.T) {
@@ -111,26 +68,7 @@ func assertOptionalGrafanaRoute(t *testing.T) {
 		t.Fatal("Grafana route validation on macOS requires CGO_ENABLED=1 so Go uses the system resolver for .kube names")
 	}
 
-	pool, err := x509.SystemCertPool()
-	if err != nil {
-		t.Fatalf("failed to load system cert pool: %v", err)
-	}
-
-	client := &http.Client{
-		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12},
-		},
-	}
-	resp, err := client.Get("https://grafana.int.kube/login")
-	if err != nil {
-		t.Fatalf("Grafana HTTPS route through gateway failed: %v", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		t.Fatalf("Grafana HTTPS route returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
-	}
+	assertHTTPSGet(t, "Grafana HTTPS route", "https://grafana.int.kube/login")
 }
 
 func assertScutilResolver(t *testing.T, domain, expectedIP string) {
@@ -159,21 +97,4 @@ func assertScutilResolver(t *testing.T, domain, expectedIP string) {
 	}
 
 	t.Fatalf("macOS scutil --dns does not contain a supplemental resolver for %q", domain)
-}
-
-func httpbinRouteInstalled(t *testing.T) bool {
-	t.Helper()
-
-	return httpRouteInstalled(t, "httpbin", "http")
-}
-
-func httpRouteInstalled(t *testing.T, namespace, name string) bool {
-	t.Helper()
-
-	output, err := runCommandE(defaultCommandTimeout, "kubectl", "get", "httproute", name, "-n", namespace, "-o", "name")
-	if err != nil {
-		warningf(t, "HTTPRoute %s/%s check skipped: %v", namespace, name, err)
-		return false
-	}
-	return strings.TrimSpace(output) == "httproute.gateway.networking.k8s.io/"+name || strings.TrimSpace(output) == "httproute/"+name
 }
