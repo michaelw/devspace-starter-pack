@@ -661,7 +661,8 @@ commands:
       trap 'rm -f "${CERTFILE}"' EXIT
 
       echo >&2 "I: Extracting Root CA certificate..."
-      kubectl get secret -n istio-ingress cluster-root-ca-secret -o jsonpath='{.data.tls\.crt}' | base64 -d > "${CERTFILE}"
+      kubectl get secret -n istio-ingress cluster-root-ca-secret \
+        -o jsonpath='{.data.tls\.crt}' | base64 -d > "${CERTFILE}"
       if [ ! -s "${CERTFILE}" ]; then
         echo >&2 "E: Failed to extract certificate or certificate is empty"
         exit 1
@@ -683,7 +684,8 @@ commands:
       trap 'rm -f "${CERTFILE}"' EXIT
 
       echo >&2 "I: Extracting Root CA certificate..."
-      kubectl get secret -n istio-ingress cluster-root-ca-secret -o jsonpath='{.data.tls\.crt}' | base64 -d > "${CERTFILE}"
+      kubectl get secret -n istio-ingress cluster-root-ca-secret \
+        -o jsonpath='{.data.tls\.crt}' | base64 -d > "${CERTFILE}"
       if [ ! -s "${CERTFILE}" ]; then
         echo >&2 "E: Failed to extract certificate or certificate is empty"
         exit 1
