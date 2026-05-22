@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -109,10 +110,15 @@ func run() error {
 	}
 
 	testEnv := append(env, "CGO_ENABLED=1")
-	goArgs := append([]string{"test", "-count=1", "-v", "-timeout", cfg.testTimeout.String()}, cfg.testArgs...)
+	goArgs := append([]string{"test", "-count=1", "-timeout", cfg.testTimeout.String()}, cfg.testArgs...)
 	goArgs = append(goArgs, "./tests/install")
-	if err := runStep(ctx, testEnv, "go", goArgs...); err != nil {
+	if output, err := runStepCapture(ctx, testEnv, "go", goArgs...); err != nil {
 		collectDiagnostics(env, cfg.diagnosticTimeout)
+		summary := formatInstallTestOutputSummary(output)
+		if summary != "" {
+			writeStepSummary(summary)
+			fmt.Fprintln(os.Stderr, summary)
+		}
 		return err
 	}
 
@@ -282,6 +288,25 @@ func runStep(ctx context.Context, env []string, name string, args ...string) err
 	return nil
 }
 
+func runStepCapture(ctx context.Context, env []string, name string, args ...string) (string, error) {
+	fmt.Printf("smoke: running %s %s\n", name, strings.Join(args, " "))
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Env = env
+
+	var output bytes.Buffer
+	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
+	cmd.Stderr = io.MultiWriter(os.Stderr, &output)
+
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return output.String(), fmt.Errorf("%s %s timed out: %w", name, strings.Join(args, " "), ctx.Err())
+		}
+		return output.String(), fmt.Errorf("%s %s failed: %w", name, strings.Join(args, " "), err)
+	}
+
+	return output.String(), nil
+}
+
 func commandOutput(ctx context.Context, env []string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = env
@@ -292,6 +317,37 @@ func commandOutput(ctx context.Context, env []string, name string, args ...strin
 		return stdout.String(), fmt.Errorf("%s %s failed: %w\nstdout:\n%s\nstderr:\n%s", name, strings.Join(args, " "), err, stdout.String(), stderr.String())
 	}
 	return stdout.String(), nil
+}
+
+func formatInstallTestOutputSummary(output string) string {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return ""
+	}
+
+	var b strings.Builder
+	b.WriteString("## Install test output\n\n```text\n")
+	b.WriteString(output)
+	b.WriteString("\n```")
+	return b.String()
+}
+
+func writeStepSummary(summary string) {
+	path := os.Getenv("GITHUB_STEP_SUMMARY")
+	if path == "" || summary == "" {
+		return
+	}
+
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "smoke: failed to write GitHub step summary: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	if _, err := file.WriteString(summary + "\n"); err != nil {
+		fmt.Fprintf(os.Stderr, "smoke: failed to append GitHub step summary: %v\n", err)
+	}
 }
 
 func splitArgs(value string) []string {
