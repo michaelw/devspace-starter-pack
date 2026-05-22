@@ -15,4 +15,5 @@ ignore: |
   charts/*/charts/
   charts/*/Chart.lock
   charts/*.tgz
+  manifests/grafana-dashboards-*.yaml
   .devspace/

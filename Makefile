@@ -1,4 +1,4 @@
-.PHONY: help install-precommit setup-dev lint test test-install test-e2e smoke clean
+.PHONY: help install-precommit setup-dev lint lint-actions lint-devspace test test-install test-e2e smoke clean verify
 
 help: ## Display this help message
 	@echo "Available targets:"
@@ -32,6 +32,14 @@ setup-dev: install-precommit ## Set up development environment
 lint: ## Run all linting checks
 	@echo "Running pre-commit on all files..."
 	pre-commit run --all-files
+
+lint-actions: ## Lint GitHub Actions workflows
+	@echo "Running actionlint..."
+	go run github.com/rhysd/actionlint/cmd/actionlint@latest
+
+lint-devspace: ## Validate DevSpace config syntax and substitution
+	@echo "Validating DevSpace config..."
+	devspace print --skip-info --disable-profile-activation >/tmp/devspace-starter-pack-devspace.yaml
 
 lint-yaml: ## Run YAML linting only
 	@echo "Running yamllint..."
@@ -72,6 +80,8 @@ format: ## Auto-format files where possible
 	@echo "Auto-formatting files..."
 	pre-commit run --all-files || true
 
-check: lint test ## Run all checks (lint + test)
+verify: lint lint-actions lint-devspace test ## Run CI-equivalent local validation without a cluster
+
+check: verify ## Run all checks
 
 .DEFAULT_GOAL := help

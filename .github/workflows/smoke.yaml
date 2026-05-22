@@ -11,22 +11,63 @@ on:
       - reopened
       - labeled
 
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   smoke:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'smoke')
+    name: Smoke
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
 
+      - name: Decide whether smoke is required
+        id: smoke
+        run: |
+          set -euo pipefail
+
+          run_smoke=false
+          reason="pull request has no smoke label or smoke-related file changes"
+          smoke_path_re='^(devspace\.yaml|Makefile|go\.mod|go\.sum|'
+          smoke_path_re+='\.github/workflows/smoke\.yaml|charts/|helm-values/|'
+          smoke_path_re+='manifests/|scripts/|tests/e2e/|tests/install/)'
+
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            run_smoke=true
+            reason="${{ github.event_name }} event"
+          elif [ "${{ contains(github.event.pull_request.labels.*.name, 'smoke') }}" = "true" ]; then
+            run_smoke=true
+            reason="pull request has smoke label"
+          else
+            changed_files="$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD)"
+            while IFS= read -r path; do
+              if [[ "${path}" =~ ${smoke_path_re} ]]; then
+                run_smoke=true
+                reason="smoke-related file changed: ${path}"
+                break
+              fi
+            done <<< "${changed_files}"
+          fi
+
+          echo "run=${run_smoke}" >> "${GITHUB_OUTPUT}"
+          echo "reason=${reason}" >> "${GITHUB_OUTPUT}"
+          echo "I: ${reason}"
+
       - name: Install smoke tooling
+        if: steps.smoke.outputs.run == 'true'
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -35,20 +76,30 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/bin"
           echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
 
-          curl -fsSL -o "${RUNNER_TEMP}/bin/kind" "https://kind.sigs.k8s.io/dl/v0.29.0/kind-linux-amd64"
+          curl -fsSL -o "${RUNNER_TEMP}/bin/kind" \
+            "https://kind.sigs.k8s.io/dl/v0.29.0/kind-linux-amd64"
           chmod +x "${RUNNER_TEMP}/bin/kind"
 
-          curl -fsSL -o "${RUNNER_TEMP}/bin/kubectl" "https://dl.k8s.io/release/v1.33.2/bin/linux/amd64/kubectl"
+          curl -fsSL -o "${RUNNER_TEMP}/bin/kubectl" \
+            "https://dl.k8s.io/release/v1.33.2/bin/linux/amd64/kubectl"
           chmod +x "${RUNNER_TEMP}/bin/kubectl"
 
           curl -fsSL "https://get.helm.sh/helm-v3.18.3-linux-amd64.tar.gz" | tar -xz -C "${RUNNER_TEMP}"
           mv "${RUNNER_TEMP}/linux-amd64/helm" "${RUNNER_TEMP}/bin/helm"
 
-          curl -fsSL -o "${RUNNER_TEMP}/bin/yq" "https://github.com/mikefarah/yq/releases/download/v4.45.4/yq_linux_amd64"
+          curl -fsSL -o "${RUNNER_TEMP}/bin/yq" \
+            "https://github.com/mikefarah/yq/releases/download/v4.45.4/yq_linux_amd64"
           chmod +x "${RUNNER_TEMP}/bin/yq"
 
-          curl -fsSL -o "${RUNNER_TEMP}/bin/devspace" "https://github.com/loft-sh/devspace/releases/download/v6.3.15/devspace-linux-amd64"
+          curl -fsSL -o "${RUNNER_TEMP}/bin/devspace" \
+            "https://github.com/loft-sh/devspace/releases/download/v6.3.15/devspace-linux-amd64"
           chmod +x "${RUNNER_TEMP}/bin/devspace"
 
       - name: Run smoke
+        if: steps.smoke.outputs.run == 'true'
         run: make smoke
+
+      - name: Skip smoke
+        if: steps.smoke.outputs.run != 'true'
+        run: |
+          echo "I: ${{ steps.smoke.outputs.reason }}"
