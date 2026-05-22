@@ -524,6 +524,7 @@ hooks:
         echo >&2 "I: Waiting for root CA to be available..."
         sleep 5
       done
+      echo >&2 "I: Root CA imported successfully."
     events: ["after:deploy:cert-chain"]
 
   - name: cert-chain-hook-linux
