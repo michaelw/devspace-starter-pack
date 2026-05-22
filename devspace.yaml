@@ -501,6 +501,12 @@ hooks:
     silent: true
     events: ["before:deploy:metallb"]
 
+  - name: wait-for-metallb-hook
+    command: |
+      echo >&2 "I: Waiting for MetalLB controller rollout..."
+      kubectl rollout status deployment/metallb-controller -n metallb-system --timeout=300s
+    events: ["after:deploy:metallb"]
+
   - name: update-cluster-dns-hook-darwin
     os: darwin
     command: devspace run update-cluster-dns
@@ -551,6 +557,7 @@ pipelines:
       PHASES=(
         "etcd gateway-api-crds"
         "cert-manager metallb reflector prometheus"
+        "metallb-resources"
         "cert-chain trust-manager"
         "istio-base"
         "istiod"
@@ -572,6 +579,7 @@ pipelines:
           create_deployments "${final[@]}"
         fi
       done
+
       create_deployments --all --except ${PHASES[@]}
       if is_in "grafana" "$enabled"; then
         # These dashboard ConfigMaps are too large for client-side apply's last-applied annotation.
