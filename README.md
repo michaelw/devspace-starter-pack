@@ -25,347 +25,167 @@ This starter pack provides a complete local Kubernetes development infrastructur
 
 ## Prerequisites
 
-### Required Tools
+Install these tools before using the local path:
 
-- **DevSpace** (>= v6.0): [Install Guide](https://devspace.sh/docs/getting-started/installation)
-- **kubectl**: Kubernetes CLI
-- **yq** (>= v4): YAML processor
-- **Helm** (>= v3): Package manager for Kubernetes
+- **DevSpace** >= v6.0
+- **kubectl**
+- **Helm** >= v3
+- **yq** >= v4
 
-### Supported Kubernetes Platforms
+Supported local Kubernetes contexts are Docker Desktop, Minikube, Rancher Desktop, MicroK8s, and
+`kind*`. macOS host integration also requires Homebrew and admin privileges for DNS and certificate
+trust setup.
 
-- Docker Desktop
-- Minikube (edit `DOCKER_CIDR_PREFIX`)
-
-### macOS-Specific Requirements
-
-- **Homebrew**: For installing `docker-mac-net-connect`
-- **Admin privileges**: Required for DNS configuration and certificate import
+GKE setup additionally requires `terraform`, `gcloud`, and `gke-gcloud-auth-plugin`. Config
+Connector is opt-in and additionally needs `tar` plus `gsutil` or `gcloud storage` to install the
+operator bundle. GKE `ensure-cluster` bootstraps Google login, derives unambiguous billing/org
+inputs from the logged-in account, and tells you which `devspace set var ...` command to run when it
+cannot choose. Run `devspace run check-tools` for a fast local preflight; it checks tools only and
+does not authenticate or install anything. See [GKE setup](docs/gke.md).
 
 ## Getting Started
-
-### 1. Clone and Navigate
 
 ```bash
 git clone <repository-url>
 cd devspace-starter-pack
-```
 
-### 2. Deploy Infrastructure
-
-Deploy all infrastructure components:
-
-```bash
 devspace deploy
 ```
 
-Deploy specific profiles:
+DevSpace auto-selects local or GKE profiles from the active kube context. Select the local workflow
+explicitly when you want to persist the current local context and DNS defaults:
 
 ```bash
-# Add databases
-devspace deploy --profile local-psql,local-redis
-
-# Add Grafana
-devspace deploy --profile o11y-grafana
-
-# Add logs and Grafana trace backend addons
-devspace deploy --profile o11y-grafana,o11y-addons
+devspace run ensure-cluster
 ```
 
-### 3. Verify Installation
-
-Check that all components are running:
+Verify the install:
 
 ```bash
+devspace run test-install
 kubectl get pods --all-namespaces
+devspace run print-cluster-env
 ```
 
-Test DNS resolution:
+On macOS, use system resolver tools for DNS checks:
 
 ```bash
 dns-sd -q ns.dns.kube
 ```
 
-**NOTE**: on macOS, do not rely on `dig` for testing DNS resolution.
+`dig` does not exercise the same macOS resolver path.
 
-### Ephemeral Smoke Validation
+## Common Workflows
 
-Run the full advertised deploy path against a throwaway local cluster:
+Add common optional services:
+
+```bash
+# Databases
+devspace deploy --profile local-psql,local-redis
+
+# Grafana
+devspace deploy --profile o11y-grafana
+
+# Grafana, logs, and Tempo
+devspace deploy --profile o11y-grafana,o11y-addons
+```
+
+Manage host DNS and trust integration:
+
+```bash
+devspace run update-cluster-dns
+devspace run reset-cluster-dns
+devspace run import-root-ca
+```
+
+Use GKE instead of a local cluster:
+
+```bash
+devspace --var CLUSTER_PROVIDER=gke run ensure-cluster
+
+devspace deploy --var HOST_INTEGRATION=false
+```
+
+If your account can see multiple billing accounts or organizations, `ensure-cluster` stops before
+Terraform and prints the exact `devspace set var ...` command to disambiguate.
+
+Select an already-prepared GKE cluster by switching to its `gke_*` kube context, setting the
+non-derivable deploy inputs, and running the same command:
+
+```bash
+kubectl config use-context gke_PROJECT_REGION_CLUSTER
+devspace set var GKE_DNS_NAMESERVERS=ns-cloud-example1.googledomains.com.,ns-cloud-example2.googledomains.com.
+devspace run ensure-cluster
+```
+
+Full GKE setup, DNS, IAP, Config Connector, registry, and smoke details are in
+[docs/gke.md](docs/gke.md).
+
+## Validation
+
+Run the advertised local deploy path against a throwaway cluster:
 
 ```bash
 make smoke
 ```
 
-This creates an ephemeral `kind` cluster with an isolated kubeconfig, runs `devspace deploy`, runs the
-live install diagnostics, and deletes the cluster. The direct e2e target is also available:
+Run the GKE smoke path:
 
 ```bash
-make test-e2e
+make smoke-gke
 ```
 
-Useful local overrides:
+Run only the install diagnostics for the current context:
 
 ```bash
-E2E_CLUSTER_NAME=my-smoke E2E_KEEP_CLUSTER=1 make smoke
-E2E_DEVSPACE_ARGS="--profile o11y-grafana" make smoke
-E2E_TIMEOUT=30m E2E_READY_TIMEOUT=10m make smoke
+devspace run test-install
 ```
 
-`E2E_CLUSTER_PROVIDER=kind` is the current default and only implemented provider. `vind` is reserved
-as a future provider name. Timeout knobs use Go duration syntax and include `E2E_TIMEOUT`,
-`E2E_CLUSTER_CREATE_WAIT`, `E2E_CLEANUP_TIMEOUT`, `E2E_READY_TIMEOUT`,
-`E2E_READY_REPORT_INTERVAL`, `E2E_DIAGNOSTIC_TIMEOUT`, and `E2E_TEST_TIMEOUT`.
+More test knobs and smoke harness details are in
+[docs/devspace-reference.md](docs/devspace-reference.md).
 
-## Available Profiles
+## Profiles And Commands
 
-| Profile | Description | Components |
-|---------|-------------|------------|
-| `local-network` | Core networking infrastructure | MetalLB, Istio, Gateway API |
-| `local-dns` | DNS integration for development | External DNS, CoreDNS, etcd |
-| `local-certs` | Certificate management | cert-manager, trust-manager, reflector |
-| `local-aux` | Auxiliary services | Reloader |
-| `local-test` | Test applications | httpbin with routes |
-| `with-o11y` | Core observability | Prometheus, metrics-server, OpenTelemetry Collector, Jaeger |
-| `o11y-grafana` | Grafana UI | Grafana, Grafana HTTPRoute, datasource/dashboard sidecars |
-| `o11y-addons` | Extended observability | Alloy, Loki, Tempo, Grafana datasource ConfigMaps |
-| `local-psql` | PostgreSQL database | PostgreSQL with persistence |
-| `local-redis` | Redis cache | Redis with persistence |
-| `local-es` | ElasticSearch | Single-node ElasticSearch |
+DevSpace auto-activates the base local or GKE infrastructure profiles from the kube context. Add
+optional profiles only for workloads you want on top:
 
-## Available Commands
+| Need | Profiles |
+|------|----------|
+| Local databases | `local-psql`, `local-redis`, `local-es` |
+| Metrics, tracing, Jaeger | `with-o11y` plus context-activated `local-o11y` or `gke-o11y` |
+| Grafana | `o11y-grafana` (`GKE` auto-activates it; local clusters opt in) |
+| Logs and Tempo | `o11y-addons` |
 
-Find all available commands:
+Useful commands:
 
 ```bash
 devspace list commands
-```
-
-### Network Commands
-
-```bash
-# Configure host DNS to use cluster DNS for .kube domains
-devspace run update-cluster-dns
-
-# Reset DNS configuration
-devspace run reset-cluster-dns
-
-# Import cluster root CA certificate to macOS keychain
-devspace run import-root-ca
-```
-
-### Observability Commands
-
-The tracing services are `ClusterIP` services by default. Service workloads should use the in-cluster
-collector DNS name directly. The Jaeger UI is exposed through the shared local HTTPS gateway at
-`https://jaeger.int.kube`. Grafana is available at `https://grafana.int.kube` when the
-`o11y-grafana` profile is deployed.
-
-```bash
-# Forward OTLP/gRPC and OTLP/HTTP for host-side trace smoke tests
+devspace run ensure-cluster
+devspace --var CLUSTER_PROVIDER=gke run ensure-cluster
+devspace run print-cluster-env
+devspace run check-gke-service-extensions
+devspace run gke-gateway-resources
+devspace run gke-dev-registry-info
 devspace run port-forward-otel
 ```
 
-## Key Features
+Starter-pack publishes a non-secret cluster environment contract at
+`devspace-system/devspace-starter-pack-env`. App repos can read provider, domain, gateway, and
+registry settings directly from the active cluster without a local starter-pack checkout.
 
-### Automatic macOS Integration
+The full profile, command, variable, and smoke-reference tables live in
+[docs/devspace-reference.md](docs/devspace-reference.md).
 
-- **Network Connectivity**: Automatically installs and configures `docker-mac-net-connect` for seamless networking
-- **DNS Integration**: Configures macOS to resolve `.kube` domains through the cluster DNS
-- **Certificate Trust**: Imports cluster CA certificates to macOS keychain for trusted HTTPS
+## Feature Guides
 
-### HTTP(S) Gateway with Istio
+- [GKE setup and validation](docs/gke.md)
+- [Gateway and authz attachment conventions](docs/gateway-authz.md)
+- [Observability](docs/observability.md)
+- [DevSpace reference](docs/devspace-reference.md)
+- [Troubleshooting](docs/troubleshooting.md)
 
-- `*.int.kube` autowired for Gateway API
-- `*.istio.kube` autowired for Istio Ingress
-- Gateway API and Istio Ingress support for traffic management
-- Automatic TLS termination with custom certificates
-- Traffic routing for microservices
-
-The Istio mesh config defines an optional Gateway API external authorization provider named
-`gateway-ext-authz-grpc`. This is only a generic extension point: infra does not install an ext-authz
-backend, does not create a `gateway-ext-authz` Service, and does not create an AuthorizationPolicy.
-If no app installs an AuthorizationPolicy that uses the provider, the provider is inert.
-
-Apps that want gateway-level external authorization must install their own ext-authz backend, a
-Service alias named `gateway-ext-authz` in the `istio-ingress` namespace on port `3001`, and an
-AuthorizationPolicy targeting the Gateway API generated gateway workload:
-`gateway.networking.k8s.io/gateway-name=gateway`.
-
-Example app-side AuthorizationPolicy:
-
-```yaml
-apiVersion: security.istio.io/v1
-kind: AuthorizationPolicy
-metadata:
-  name: example-gateway-ext-authz
-  namespace: istio-ingress
-spec:
-  selector:
-    matchLabels:
-      gateway.networking.k8s.io/gateway-name: gateway
-  action: CUSTOM
-  provider:
-    name: gateway-ext-authz-grpc
-  rules:
-    - {}
-```
-
-Example app-side Service alias:
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: gateway-ext-authz
-  namespace: istio-ingress
-spec:
-  type: ExternalName
-  externalName: my-ext-authz.my-app-namespace.svc.cluster.local
-  ports:
-    - name: grpc
-      port: 3001
-      targetPort: 3001
-```
-
-### Certificate Management
-
-- Complete CA chain (Cluster Root CA → Intermediate CA → Leaf certificates)
-- Automatic certificate renewal
-- Trust bundle distribution across namespaces
-- Custom certificate chain in `charts/cert-chain/`
-
-### Local DNS Resolution
-
-- `.kube` domain resolution for all services of type `Loadbalancer`
-- External DNS automatically creates DNS records
-
-### Observability Stack
-
-- **OpenTelemetry Collector**: Local OTLP/gRPC and OTLP/HTTP trace receiver for service repositories
-- **Jaeger**: Lightweight trace UI with transient in-memory storage
-- **Prometheus**: Default local metrics collection and alerting
-- **Grafana**: Optional visualization with default local cluster dashboards and dashboard provisioning
-- **Loki**: Optional log aggregation
-- **Tempo**: Optional distributed tracing backend
-- **Alloy**: Optional OpenTelemetry collection
-
-The default local deployment includes Prometheus and lightweight tracing. Deploy Grafana when a
-host-browser UI is needed:
-
-```bash
-devspace deploy --profile o11y-grafana
-```
-
-Service repositories can export traces and metrics to the collector with:
-
-```bash
-OTEL_SERVICE_NAME=<service-name>
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability.svc.cluster.local:4317
-OTEL_EXPORTER_OTLP_PROTOCOL=grpc
-```
-
-For OTLP/HTTP exporters, use:
-
-```bash
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability.svc.cluster.local:4318
-OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
-```
-
-Open the trace UI at `https://jaeger.int.kube`. In-cluster workloads export to
-`otel-collector.observability.svc.cluster.local` without port-forwarding. Grafana reads metrics from
-Prometheus, including OTLP metrics remote-written by the collector. The collector preserves resource
-attributes as metric labels for local querying, while keeping a single remote-write sender path for
-the in-cluster Prometheus receiver.
-
-Istio gateway and control-plane metrics are scraped directly by Prometheus so the official Istio RED
-dashboards keep their upstream metric and label expectations. Istio proxy tracing is sent to the same
-OpenTelemetry Collector and Jaeger path with local-only 100% sampling.
-
-Open Grafana at `https://grafana.int.kube` and log in with `admin` / `admin`
-(the local-only credentials configured in `helm-values/grafana.yaml`).
-
-Deploy Loki, Alloy, and Tempo when logs or Grafana-backed trace exploration are needed:
-
-```bash
-devspace deploy --profile o11y-grafana,o11y-addons
-```
-
-Grafana discovers additional dashboards and datasources from Kubernetes objects:
-
-- Dashboards: create a ConfigMap or Secret with label `grafana_dashboard: "1"` and dashboard JSON data.
-- Datasources: create a ConfigMap or Secret with label `grafana_datasource: "1"` and Grafana provisioning YAML.
-- Optional dashboard folders: set annotation `grafana_folder` on the dashboard ConfigMap or Secret.
-- These objects can live in service repository namespaces; the Grafana sidecars watch all namespaces.
-
-The `o11y-grafana` profile installs starter dashboards in the `Kubernetes` folder for API server,
-compute resource, and kubelet/runtime health.
-
-It also installs upstream Grafana.com dashboards in the `Candidates` folder for comparison:
-`Kubernetes Overview` and `OpenTelemetry Collector`. `Kubernetes Overview` is configured as the
-Grafana home dashboard for the local instance.
-
-The `Istio` folder contains official Istio `1.26.2` dashboards for mesh, service, workload, and
-control-plane RED drilldowns.
-
-### Helm Values
-
-Customize component configurations in `helm-values/`:
-
-### Certificate Configuration
-
-Customize the certificate chain in `charts/cert-chain/values.yaml` or create custom values files.
-
-## Troubleshooting
-
-### DNS Issues
-
-```bash
-# Check DNS configuration
-devspace run reset-cluster-dns
-devspace run update-cluster-dns
-
-# Verify CoreDNS is running
-kubectl get pods -n external-dns
-```
-
-### Certificate Issues
-
-```bash
-# Check certificate status
-kubectl get certificates --all-namespaces
-kubectl describe certificate cluster-root-ca -n cert-manager
-
-# Re-import root CA
-devspace run import-root-ca
-```
-
-### Network Connectivity
-
-```bash
-# Check docker-mac-net-connect status
-brew services list | grep docker-mac-net-connect
-
-# Restart network connectivity
-sudo brew services restart chipmk/tap/docker-mac-net-connect
-```
-
-### LoadBalancer Issues
-
-```bash
-# Check MetalLB status
-kubectl get pods -n metallb-system
-kubectl get ipaddresspools -n metallb-system
-```
-
-## Development Workflow
-
-1. **Deploy Infrastructure**: `devspace deploy --profile local-network,local-certs`
-2. **Add DNS** (optional): `devspace deploy --profile local-dns`
-3. **Use Metrics/Tracing**: included by default through `with-o11y` on local clusters
-4. **Add Grafana** (optional): `devspace deploy --profile o11y-grafana`
-5. **Add Logs/Tempo** (optional): `devspace deploy --profile o11y-grafana,o11y-addons`
-6. **Deploy Your Applications**: Use the configured Gateway and DNS
-7. **Access Services**: Via `*.kube` domains with automatic HTTPS
+Customize Helm values in `helm-values/`. Customize the certificate chain in
+`charts/cert-chain/values.yaml`.
 
 ## Cleanup
 
@@ -380,6 +200,8 @@ Reset macOS DNS configuration:
 ```bash
 devspace run reset-cluster-dns
 ```
+
+For GKE Terraform cleanup, see [docs/gke.md](docs/gke.md).
 
 ## License
 
