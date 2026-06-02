@@ -1,0 +1,40 @@
+{{- if eq .Values.protection "iap" -}}
+{{- if or (and .Values.oauthClientID (not .Values.oauthClientSecret)) (and .Values.oauthClientSecret (not .Values.oauthClientID)) -}}
+{{- fail "custom GKE IAP OAuth requires both oauthClientID and oauthClientSecret; leave both empty to use Google-managed OAuth" -}}
+{{- end -}}
+{{- $customOAuth := and .Values.oauthClientID .Values.oauthClientSecret -}}
+{{- if $customOAuth }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Values.secretName | quote }}
+type: Opaque
+stringData:
+  key: {{ .Values.oauthClientSecret | quote }}
+---
+{{- end }}
+{{- range .Values.targets }}
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+metadata:
+  name: {{ .policyName | quote }}
+spec:
+  default:
+    iap:
+      enabled: true
+      {{- if $customOAuth }}
+      oauth2ClientSecret:
+        name: {{ $.Values.secretName | quote }}
+      clientID: {{ $.Values.oauthClientID | quote }}
+      {{- end }}
+  targetRef:
+    group: ""
+    kind: Service
+    name: {{ .serviceName | quote }}
+---
+{{- end }}
+{{- else if eq .Values.protection "vpn" -}}
+{{- fail "GKE_PROTECTION=vpn is reserved for future private-Gateway/VPN support and is not implemented yet" -}}
+{{- else -}}
+{{- fail (printf "unsupported GKE_PROTECTION=%s; expected iap or vpn" .Values.protection) -}}
+{{- end -}}

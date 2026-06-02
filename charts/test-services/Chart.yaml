@@ -1,0 +1,6 @@
+apiVersion: v2
+name: test-services
+description: Shared local and GKE test services for the starter pack
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

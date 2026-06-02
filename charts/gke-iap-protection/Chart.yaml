@@ -1,0 +1,6 @@
+apiVersion: v2
+name: gke-iap-protection
+description: GKE BackendPolicy resources for IAP-protected development routes
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

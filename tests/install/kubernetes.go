@@ -150,6 +150,15 @@ type condition struct {
 	Message string `json:"message"`
 }
 
+type gateway struct {
+	Status struct {
+		Addresses []struct {
+			Value string `json:"value"`
+		} `json:"addresses"`
+		Conditions []condition `json:"conditions"`
+	} `json:"status"`
+}
+
 type certificateList struct {
 	Items []certResource `json:"items"`
 }
@@ -435,6 +444,34 @@ func assertKubernetesObjectAbsent(t *testing.T, kind, name, namespace string) {
 	}
 }
 
+func assertGCPBackendPolicyInstalled(t *testing.T, namespace, name string) {
+	t.Helper()
+
+	output, err := runCommandE(defaultCommandTimeout, "kubectl", "get", "gcpbackendpolicy", name, "-n", namespace, "-o", "name")
+	if err != nil {
+		t.Fatalf("GCPBackendPolicy %s/%s is not installed: %v", namespace, name, err)
+	}
+	got := strings.TrimSpace(output)
+	if got != "gcpbackendpolicy.networking.gke.io/"+name && got != "gcpbackendpolicy/"+name {
+		t.Fatalf("unexpected GCPBackendPolicy name for %s/%s: %s", namespace, name, got)
+	}
+}
+
+func assertGCPTrafficExtensionForwardAttributesSupported(t *testing.T) {
+	t.Helper()
+
+	output, err := runCommandE(defaultCommandTimeout, "kubectl", "get", "crd", "gcptrafficextensions.networking.gke.io",
+		"-o", "jsonpath={.spec.versions[?(@.name==\"v1\")].schema.openAPIV3Schema.properties.spec.properties.extensionChains.items.properties.extensions.items.properties.forwardAttributes.type}")
+	if err != nil {
+		t.Fatalf("GCPTrafficExtension CRD is not installed or could not be inspected: %v", err)
+	}
+	if strings.TrimSpace(output) == "" {
+		componentVersion, _ := runCommandE(defaultCommandTimeout, "kubectl", "get", "crd", "gcptrafficextensions.networking.gke.io",
+			"-o", "jsonpath={.metadata.annotations.components\\.gke\\.io/component-version}")
+		t.Fatalf("GCPTrafficExtension CRD does not support spec.extensionChains[].extensions[].forwardAttributes; installed GKE Gateway CRD component version is %q", strings.TrimSpace(componentVersion))
+	}
+}
+
 func assertServiceMonitorInstalled(t *testing.T, namespace, name string) {
 	t.Helper()
 
@@ -527,6 +564,28 @@ func requireServiceLoadBalancerIP(t *testing.T, namespace, name string) string {
 		t.Fatalf("%s LoadBalancer ingress is not an IPv4 address: %s", describeObject(namespace, "service", name), address)
 	}
 	return address
+}
+
+func requireGatewayAddress(t *testing.T, namespace, name string) string {
+	t.Helper()
+
+	gw := kubectlJSON[gateway](t, "get", "gateway", name, "-n", namespace)
+	if !conditionTrue(gw.Status.Conditions, "Accepted") {
+		t.Fatalf("%s is not Accepted", describeObject(namespace, "gateway", name))
+	}
+	if len(gw.Status.Addresses) == 0 || gw.Status.Addresses[0].Value == "" {
+		t.Fatalf("%s has no status address", describeObject(namespace, "gateway", name))
+	}
+	return gw.Status.Addresses[0].Value
+}
+
+func conditionTrue(conditions []condition, conditionType string) bool {
+	for _, condition := range conditions {
+		if condition.Type == conditionType && condition.Status == "True" {
+			return true
+		}
+	}
+	return false
 }
 
 func assertCertManagerResourcesReady(t *testing.T) {

@@ -1,0 +1,5 @@
+gatewayProvider: local-istio
+dnsDomain: int.kube
+gatewayNamespace: istio-ingress
+istioGatewayNamespace: istio-ingress
+istioGatewayName: istio-gateway

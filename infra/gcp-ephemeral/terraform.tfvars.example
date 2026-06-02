@@ -1,0 +1,34 @@
+billing_account_id = "BILLING_ACCOUNT_ID"
+org_id             = "ORGANIZATION_ID"
+# folder_id        = "FOLDER_ID" # Takes precedence over org_id when set.
+
+# Optional overrides:
+# project_id   = "devspace-gke-example"
+# project_name = "devspace-starter-pack-gke"
+# region       = "us-central1"
+# dns_domain   = "gcp.kube."
+# dev_registry_repository_id = "devspace-dev"
+# dev_registry_writer_members = [
+#   "user:developer@example.com",
+#   "group:platform@example.com",
+#   "serviceAccount:ci@example-project.iam.gserviceaccount.com",
+# ]
+# iap_accessor_members = [
+#   "user:developer@example.com",
+#   "group:platform@example.com",
+# ]
+
+# Optional: enable Config Connector and override the broad project-scoped roles
+# granted to the cluster-mode controller. The Terraform default role set is
+# intended for ephemeral development projects, not multi-tenant production
+# clusters.
+# config_connector_enabled = true
+# config_connector_iam_roles = [
+#   "roles/artifactregistry.admin",
+#   "roles/compute.networkAdmin",
+#   "roles/dns.admin",
+#   "roles/iam.serviceAccountAdmin",
+#   "roles/iam.serviceAccountUser",
+#   "roles/resourcemanager.projectIamAdmin",
+#   "roles/serviceusage.serviceUsageAdmin",
+# ]

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,6 +35,30 @@ func assertDefaultResolverResolves(t *testing.T, name, expectedIP string) {
 	if !containsIP(ips, expectedIP) {
 		t.Fatalf("host resolver query for %s resolved %v, expected %s", name, ips, expectedIP)
 	}
+}
+
+func assertCloudDNSResolves(t *testing.T, nameservers, name, expectedIP string) {
+	t.Helper()
+
+	nameserverIP := firstNameserverIP(t, nameservers)
+	assertDirectDNSResolves(t, nameserverIP, name, expectedIP)
+}
+
+func firstNameserverIP(t *testing.T, nameservers string) string {
+	t.Helper()
+
+	for _, ns := range strings.Fields(strings.ReplaceAll(nameservers, ",", " ")) {
+		ns = strings.TrimSuffix(ns, ".") + "."
+		ips := lookupHost(t, net.DefaultResolver, ns, "default resolver for Cloud DNS nameserver")
+		for _, ip := range ips {
+			if strings.Contains(ip, ".") {
+				return ip
+			}
+		}
+	}
+
+	t.Fatalf("GKE_DNS_NAMESERVERS did not contain a nameserver with an IPv4 address: %q", nameservers)
+	return ""
 }
 
 func lookupHost(t *testing.T, resolver *net.Resolver, name, description string) []string {

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defaultProvider            = "kind"
+	defaultProvider            = "local"
 	defaultTimeout             = 20 * time.Minute
 	defaultClusterCreateWait   = 5 * time.Minute
 	defaultCleanupTimeout      = 5 * time.Minute
@@ -95,7 +95,20 @@ func run() error {
 	}()
 
 	env := append(os.Environ(), "KUBECONFIG="+kubeconfig)
-	if err := assertContext(ctx, env, provider.contextName(cfg.clusterName)); err != nil {
+	if envProvider, ok := provider.(interface {
+		environment(context.Context, string) ([]string, error)
+	}); ok {
+		extraEnv, err := envProvider.environment(ctx, kubeconfig)
+		if err != nil {
+			return err
+		}
+		env = append(env, extraEnv...)
+	}
+	expectedContext, err := provider.contextName(ctx, cfg.clusterName)
+	if err != nil {
+		return err
+	}
+	if err := assertContext(ctx, env, expectedContext); err != nil {
 		return err
 	}
 
@@ -109,7 +122,7 @@ func run() error {
 		return err
 	}
 
-	testEnv := append(env, "CGO_ENABLED=1")
+	testEnv := append(env, "CGO_ENABLED=1", "CLUSTER_PROVIDER="+cfg.providerName)
 	goArgs := append([]string{"test", "-count=1", "-timeout", cfg.testTimeout.String()}, cfg.testArgs...)
 	goArgs = append(goArgs, "./tests/install")
 	if output, err := runStepCapture(ctx, testEnv, "go", goArgs...); err != nil {
@@ -213,17 +226,22 @@ func printPendingPodDiagnostics(env []string, timeout time.Duration) {
 }
 
 func loadConfig() config {
-	providerName := getenvDefault("E2E_CLUSTER_PROVIDER", defaultProvider)
+	providerName := getenvDefault("CLUSTER_PROVIDER", defaultProvider)
 	clusterName := os.Getenv("E2E_CLUSTER_NAME")
 	if clusterName == "" {
 		clusterName = fmt.Sprintf("devspace-smoke-%d", time.Now().Unix())
+	}
+
+	devspaceArgs := splitArgs(os.Getenv("E2E_DEVSPACE_ARGS"))
+	if providerName == "gke" && len(devspaceArgs) == 0 {
+		devspaceArgs = []string{"--profile", "with-test"}
 	}
 
 	return config{
 		providerName: providerName,
 		clusterName:  clusterName,
 		keepCluster:  os.Getenv("E2E_KEEP_CLUSTER") == "1",
-		devspaceArgs: splitArgs(os.Getenv("E2E_DEVSPACE_ARGS")),
+		devspaceArgs: devspaceArgs,
 		testArgs:     splitArgs(os.Getenv("E2E_TEST_ARGS")),
 
 		timeout:             durationFromEnv("E2E_TIMEOUT", defaultTimeout),

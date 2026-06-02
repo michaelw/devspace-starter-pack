@@ -42,7 +42,11 @@ func assertOptionalHTTPSRoute(t *testing.T) {
 		t.Fatal("HTTPS route validation on macOS requires CGO_ENABLED=1 so Go uses the system resolver for .kube names")
 	}
 
-	assertHTTPSGet(t, "HTTPS route", "https://httpbin.int.kube/get")
+	assertHTTPSGet(t, "HTTPS route", "https://"+routeHost("httpbin")+"/get")
+	if clusterProvider() == "gke" {
+		assertHTTPSHeaderPreserved(t, "httpbin Authorization header", "https://"+routeHost("httpbin")+"/headers", "Authorization", "Bearer devspace-starter-pack-test")
+		assertHTTPRedirectsToHTTPS(t, "httpbin HTTP route", "http://"+routeHost("httpbin")+"/get")
+	}
 }
 
 func assertOptionalTracingRoute(t *testing.T) {
@@ -55,7 +59,13 @@ func assertOptionalTracingRoute(t *testing.T) {
 		t.Fatal("Jaeger route validation on macOS requires CGO_ENABLED=1 so Go uses the system resolver for .kube names")
 	}
 
-	assertHTTPSGet(t, "Jaeger HTTPS route", "https://jaeger.int.kube/")
+	if clusterProvider() == "gke" && gkeProtection() == "iap" {
+		assertGCPBackendPolicyInstalled(t, "observability", "jaeger-iap")
+		assertHTTPSRequiresIAP(t, "Jaeger HTTPS route", "https://"+routeHost("jaeger")+"/")
+		assertHTTPRedirectsToHTTPS(t, "Jaeger HTTP route", "http://"+routeHost("jaeger")+"/")
+		return
+	}
+	assertHTTPSGet(t, "Jaeger HTTPS route", "https://"+routeHost("jaeger")+"/")
 }
 
 func assertOptionalGrafanaRoute(t *testing.T) {
@@ -68,6 +78,12 @@ func assertOptionalGrafanaRoute(t *testing.T) {
 		t.Fatal("Grafana route validation on macOS requires CGO_ENABLED=1 so Go uses the system resolver for .kube names")
 	}
 
+	if clusterProvider() == "gke" && gkeProtection() == "iap" {
+		assertGCPBackendPolicyInstalled(t, "observability", "grafana-iap")
+		assertHTTPSRequiresIAP(t, "Grafana HTTPS route", "https://"+routeHost("grafana")+"/login")
+		assertHTTPRedirectsToHTTPS(t, "Grafana HTTP route", "http://"+routeHost("grafana")+"/login")
+		return
+	}
 	assertHTTPSGet(t, "Grafana HTTPS route", "https://grafana.int.kube/login")
 }
 

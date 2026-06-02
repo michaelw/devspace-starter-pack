@@ -10,12 +10,88 @@ require:
       version: ">= 4"
 
 vars:
+  CLUSTER_PROVIDER:
+    value: ""
   ISTIO_CHART_VERSION: 1.26.2
   GATEWAY_EXT_AUTHZ_PROVIDER_NAME: gateway-ext-authz-grpc
   GATEWAY_EXT_AUTHZ_SERVICE_NAME: gateway-ext-authz
   GATEWAY_EXT_AUTHZ_SERVICE_NAMESPACE: istio-ingress
   GATEWAY_EXT_AUTHZ_SERVICE_PORT:
-    default: 3001
+    value: 3001
+  GATEWAY_NAMESPACE:
+    command: ./scripts/cluster-env-var.sh
+    args: ["GATEWAY_NAMESPACE", "istio-ingress"]
+  GATEWAY_PROVIDER:
+    command: ./scripts/cluster-env-var.sh
+    args: ["GATEWAY_PROVIDER", "local-istio"]
+  DNS_DOMAIN:
+    command: ./scripts/cluster-env-var.sh
+    args: ["DNS_DOMAIN", "int.kube"]
+  DNS_MODE:
+    command: ./scripts/cluster-env-var.sh
+    args: ["DNS_MODE", "local"]
+  DNS_SERVICE_ID:
+    command: ./scripts/cluster-env-var.sh
+    args: ["DNS_SERVICE_ID", "kube"]
+  HOST_INTEGRATION:
+    value: "true"
+  GKE_DNS_DOMAIN:
+    value: gcp.kube
+  GKE_DNS_NAMESERVERS:
+    command: ./scripts/cluster-env-var.sh
+    args: ["GKE_DNS_NAMESERVERS", ""]
+  GKE_SELECTED_CONTEXT:
+    command: ./scripts/cluster-env-var.sh
+    args: ["GKE_SELECTED_CONTEXT", ""]
+  GKE_PROJECT_ID:
+    command: ./scripts/cluster-env-var.sh
+    args: ["GKE_PROJECT_ID", ""]
+  GKE_REGION:
+    command: ./scripts/cluster-env-var.sh
+    args: ["GKE_REGION", "us-central1"]
+  GKE_GCLOUD_CONFIGURATION:
+    value: devspace-starter-pack
+  GKE_GCLOUD_ACCOUNT:
+    value: ""
+  GKE_PROTECTION:
+    value: iap
+  GKE_IAP_OAUTH_CLIENT_ID:
+    value: ""
+  GKE_IAP_OAUTH_CLIENT_SECRET:
+    value: ""
+  GKE_IAP_SECRET_NAME:
+    value: iap-oauth-client
+  GCP_BILLING_ACCOUNT_ID:
+    value: ""
+  GCP_ORG_ID:
+    value: ""
+  GCP_FOLDER_ID:
+    value: ""
+  DEV_REGISTRY_HOST:
+    command: ./scripts/cluster-env-var.sh
+    args: ["DEV_REGISTRY_HOST", ""]
+  DEV_REGISTRY:
+    command: ./scripts/cluster-env-var.sh
+    args: ["DEV_REGISTRY", ""]
+  DEV_REGISTRY_IMAGE_PREFIX:
+    command: ./scripts/cluster-env-var.sh
+    args: ["DEV_REGISTRY_IMAGE_PREFIX", ""]
+  DEV_REGISTRY_REPOSITORY:
+    value: devspace-dev
+  DEV_REGISTRY_WRITER_MEMBERS:
+    value: ""
+  GKE_IAP_ACCESSOR_MEMBERS:
+    value: ""
+  CONFIG_CONNECTOR_ENABLED:
+    value: "false"
+  CONFIG_CONNECTOR_MODE:
+    value: ""
+  CONFIG_CONNECTOR_PROJECT_ID:
+    value: ""
+  CONFIG_CONNECTOR_SERVICE_ACCOUNT:
+    value: ""
+  GRAFANA_ROUTE_MANIFEST:
+    value: ./manifests/grafana-route.yaml
   METALLB_CHART_VERSION: v0.15.2
   POSTGRES_VERSION: 16
   POSTGRES_CHART_VERSION: 16.7.20
@@ -57,6 +133,12 @@ profiles:
       - vars:
           DEVSPACE_CONTEXT: "^(kind(?:-.+)?|docker-desktop|minikube|rancher-desktop|microk8s)$"
     merge:
+      vars:
+        GATEWAY_NAMESPACE: istio-ingress
+        GATEWAY_PROVIDER: local-istio
+        DNS_DOMAIN: int.kube
+        DNS_MODE: local
+        DNS_SERVICE_ID: kube
       deployments:
         metallb:
           namespace: metallb-system
@@ -233,6 +315,9 @@ profiles:
               name: cert-manager
               repo: https://charts.jetstack.io
             values:
+              global:
+                leaderElection:
+                  namespace: cert-manager
               installCRDs: true
               config:
                 apiVersion: controller.config.cert-manager.io/v1alpha1
@@ -294,25 +379,195 @@ profiles:
               securityContext:
                 runAsUser: 999
 
-  - name: local-test
-    description: Test applications
+  - name: with-test
+    description: Shared test service applications
     merge:
       deployments:
         httpbin:
           namespace: httpbin
+          helm:
+            chart:
+              name: test-services
+              path: ./charts/test-services
+            values:
+              gatewayProvider: ${GATEWAY_PROVIDER}
+              dnsDomain: ${DNS_DOMAIN}
+              gatewayNamespace: ${GATEWAY_NAMESPACE}
+              istioGatewayNamespace: istio-ingress
+              istioGatewayName: istio-gateway
+
+  - name: gke-network
+    description: GKE Gateway API networking without Istio
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^gke_.+"
+    merge:
+      vars:
+        GATEWAY_NAMESPACE: gke-gateway
+        GATEWAY_PROVIDER: gke-gateway
+        DNS_DOMAIN: ${GKE_DNS_DOMAIN}
+        DNS_MODE: cloud-dns
+        DNS_SERVICE_ID: gcp-kube
+      deployments:
+        gke-gateway:
+          namespace: gke-gateway
           kubectl:
-            manifests:
-              - ./manifests/httpbin-namespace.yaml
-              - https://raw.githubusercontent.com/istio/istio/release-1.26/samples/httpbin/httpbin.yaml
-              - ./manifests/httpbin-routes.yaml
-              - ./manifests/httpbin-istio-vs.yaml
-              - ./manifests/httpbin-service-mesh.yaml
+            inlineManifest: |-
+              ---
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name: gke-gateway
+              ---
+              apiVersion: gateway.networking.k8s.io/v1
+              kind: Gateway
+              metadata:
+                name: gateway
+                namespace: gke-gateway
+              spec:
+                gatewayClassName: gke-l7-regional-external-managed
+                listeners:
+                - name: http
+                  hostname: "*.${GKE_DNS_DOMAIN}"
+                  port: 80
+                  protocol: HTTP
+                  allowedRoutes:
+                    namespaces:
+                      from: All
+                - name: https
+                  hostname: "*.${GKE_DNS_DOMAIN}"
+                  port: 443
+                  protocol: HTTPS
+                  tls:
+                    mode: Terminate
+                    certificateRefs:
+                    - name: gateway-tls-secret
+                  allowedRoutes:
+                    namespaces:
+                      from: All
+
+  - name: gke-dns
+    description: external-dns backed by Google Cloud DNS for GKE
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^gke_.+"
+    merge:
+      vars:
+        DNS_DOMAIN: ${GKE_DNS_DOMAIN}
+        DNS_MODE: cloud-dns
+        DNS_SERVICE_ID: gcp-kube
+      deployments:
+        external-dns:
+          namespace: external-dns
+          helm:
+            chart:
+              name: external-dns
+              version: 1.21.1
+              repo: https://kubernetes-sigs.github.io/external-dns/
+            values:
+              provider:
+                name: google
+              policy: sync
+              registry: txt
+              txtOwnerId: ${GKE_PROJECT_ID}
+              domainFilters:
+                - ${GKE_DNS_DOMAIN}
+              sources:
+                - gateway-httproute
+              serviceAccount:
+                create: true
+                name: external-dns
+                annotations:
+                  iam.gke.io/gcp-service-account: external-dns@${GKE_PROJECT_ID}.iam.gserviceaccount.com
+              rbac:
+                create: true
+              logLevel: debug
+              extraArgs:
+                google-project: ${GKE_PROJECT_ID}
+                gateway-namespace: gke-gateway
+                gateway-name: gateway
+
+  - name: gke-certs
+    description: Internal CA and trusted TLS for GKE Gateway
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^gke_.+"
+    merge:
+      vars:
+        GATEWAY_NAMESPACE: gke-gateway
+        GATEWAY_PROVIDER: gke-gateway
+        DNS_DOMAIN: ${GKE_DNS_DOMAIN}
+        DNS_MODE: cloud-dns
+        DNS_SERVICE_ID: gcp-kube
+      deployments:
+        cert-manager:
+          namespace: cert-manager
+          helm:
+            chart:
+              name: cert-manager
+              repo: https://charts.jetstack.io
+            values:
+              installCRDs: true
+              global:
+                leaderElection:
+                  namespace: cert-manager
+              config:
+                apiVersion: controller.config.cert-manager.io/v1alpha1
+                kind: ControllerConfiguration
+                enableGatewayAPI: true
+        trust-manager:
+          namespace: cert-manager
+          helm:
+            chart:
+              name: trust-manager
+              repo: https://charts.jetstack.io
+        reflector:
+          namespace: reflector
+          helm:
+            chart:
+              name: oci://ghcr.io/emberstack/helm-charts/reflector
+        cert-chain:
+          namespace: cert-manager
+          helm:
+            chart:
+              name: cert-chain
+              path: ./charts/cert-chain
+            values:
+              issuers:
+                intermediate:
+                  namespace: gke-gateway
+              gatewayCert:
+                enabled: true
+                dnsNames:
+                  - "*.${GKE_DNS_DOMAIN}"
+
+  - name: gke-config-connector
+    description: Config Connector cluster-mode configuration for managed GKE
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^gke_.+"
+          CONFIG_CONNECTOR_ENABLED: "^true$"
+    merge:
+      deployments:
+        gke-config-connector:
+          kubectl:
+            inlineManifest: |-
+              apiVersion: core.cnrm.cloud.google.com/v1beta1
+              kind: ConfigConnector
+              metadata:
+                name: configconnector.core.cnrm.cloud.google.com
+              spec:
+                mode: ${CONFIG_CONNECTOR_MODE}
+                googleServiceAccount: ${CONFIG_CONNECTOR_SERVICE_ACCOUNT}
+                stateIntoSpec: Absent
 
   - name: with-o11y
-    description: Cluster observability with Prometheus metrics and lightweight tracing
+    description: Shared observability base with Prometheus metrics and lightweight tracing
     activation:
       - vars:
           DEVSPACE_CONTEXT: "^(kind(?:-.+)?|docker-desktop|minikube|rancher-desktop|microk8s)$"
+      - vars:
+          DEVSPACE_CONTEXT: "^gke_.+"
     merge:
       deployments:
         prometheus:
@@ -323,15 +578,6 @@ profiles:
               repo: https://prometheus-community.github.io/helm-charts
             valuesFiles:
               - ./helm-values/prometheus.yaml
-        metric-server:
-          namespace: kube-system
-          helm:
-            chart:
-              name: metrics-server
-              repo: https://kubernetes-sigs.github.io/metrics-server
-            values:
-              args:
-                - --kubelet-insecure-tls
         jaeger:
           namespace: observability
           helm:
@@ -352,6 +598,23 @@ profiles:
             valuesFiles:
               - ./helm-values/otel-collector.yaml
 
+  - name: local-o11y
+    description: Local observability overlay for metrics-server, Istio monitors, and local routes
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^(kind(?:-.+)?|docker-desktop|minikube|rancher-desktop|microk8s)$"
+    merge:
+      deployments:
+        metric-server:
+          namespace: kube-system
+          helm:
+            chart:
+              name: metrics-server
+              repo: https://kubernetes-sigs.github.io/metrics-server
+            values:
+              args:
+                - --kubelet-insecure-tls
+
         jaeger-route:
           namespace: observability
           kubectl:
@@ -364,8 +627,88 @@ profiles:
             manifests:
               - ./manifests/istio-metrics-monitors.yaml
 
+  - name: gke-o11y
+    description: GKE observability overlay for managed metrics, routes, and IAP
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^gke_.+"
+    merge:
+      vars:
+        GRAFANA_ROUTE_MANIFEST: ./manifests/grafana-route-gke.yaml
+      deployments:
+        prometheus:
+          helm:
+            values:
+              defaultRules:
+                rules:
+                  kubeControllerManager: false
+                  kubelet: false
+                  kubeProxy: false
+                  kubeSchedulerAlerting: false
+                  kubeSchedulerRecording: false
+              kubelet:
+                enabled: false
+              kubeControllerManager:
+                enabled: false
+              kubeScheduler:
+                enabled: false
+              kubeEtcd:
+                enabled: false
+              kubeProxy:
+                enabled: false
+              coreDns:
+                enabled: false
+              kubeDns:
+                enabled: false
+              prometheusOperator:
+                kubeletService:
+                  enabled: false
+        jaeger-route:
+          namespace: observability
+          kubectl:
+            manifests:
+              - ./manifests/jaeger-route-gke.yaml
+        gke-o11y-protection:
+          namespace: observability
+          helm:
+            chart:
+              name: gke-iap-protection
+              path: ./charts/gke-iap-protection
+            values:
+              protection: ${GKE_PROTECTION}
+              oauthClientID: ${GKE_IAP_OAUTH_CLIENT_ID}
+              oauthClientSecret: ${GKE_IAP_OAUTH_CLIENT_SECRET}
+              secretName: ${GKE_IAP_SECRET_NAME}
+              targets:
+                - policyName: jaeger-iap
+                  serviceName: jaeger
+                - policyName: grafana-iap
+                  serviceName: grafana
+        grafana-health-check:
+          namespace: observability
+          kubectl:
+            inlineManifest: |-
+              apiVersion: networking.gke.io/v1
+              kind: HealthCheckPolicy
+              metadata:
+                name: grafana
+              spec:
+                default:
+                  config:
+                    type: HTTP
+                    httpHealthCheck:
+                      portSpecification: USE_SERVING_PORT
+                      requestPath: /api/health
+                targetRef:
+                  group: ""
+                  kind: Service
+                  name: grafana
+
   - name: o11y-grafana
-    description: Grafana UI for local observability
+    description: Grafana UI for observability
+    activation:
+      - vars:
+          DEVSPACE_CONTEXT: "^gke_.+"
     merge:
       deployments:
         grafana:
@@ -381,7 +724,7 @@ profiles:
           namespace: observability
           kubectl:
             manifests:
-              - ./manifests/grafana-route.yaml
+              - ${GRAFANA_ROUTE_MANIFEST}
 
         grafana-datasource-prometheus:
           namespace: observability
@@ -509,17 +852,31 @@ hooks:
 
   - name: update-cluster-dns-hook-darwin
     os: darwin
-    command: devspace run update-cluster-dns
+    command: |
+      if [ "${HOST_INTEGRATION}" != "true" ]; then
+        echo >&2 "I: Skipping host DNS integration because HOST_INTEGRATION=${HOST_INTEGRATION}"
+        exit 0
+      fi
+      devspace run update-cluster-dns
     events: ["after:deploy:cert-chain"]
 
   - name: update-cluster-dns-hook-linux
     os: linux
-    command: devspace run update-cluster-dns-linux
+    command: |
+      if [ "${HOST_INTEGRATION}" != "true" ]; then
+        echo >&2 "I: Skipping host DNS integration because HOST_INTEGRATION=${HOST_INTEGRATION}"
+        exit 0
+      fi
+      devspace run update-cluster-dns-linux
     events: ["after:deploy:cert-chain"]
 
   - name: cert-chain-hook-darwin
     os: darwin
     command: |
+      if [ "${HOST_INTEGRATION}" != "true" ]; then
+        echo >&2 "I: Skipping host CA import because HOST_INTEGRATION=${HOST_INTEGRATION}"
+        exit 0
+      fi
       while ! devspace run import-root-ca; do
         echo >&2 "I: Waiting for root CA to be available..."
         sleep 5
@@ -530,6 +887,10 @@ hooks:
   - name: cert-chain-hook-linux
     os: linux
     command: |
+      if [ "${HOST_INTEGRATION}" != "true" ]; then
+        echo >&2 "I: Skipping host CA import because HOST_INTEGRATION=${HOST_INTEGRATION}"
+        exit 0
+      fi
       while ! devspace run import-root-ca-linux; do
         echo >&2 "I: Waiting for root CA to be available..."
         sleep 5
@@ -555,8 +916,17 @@ hooks:
 pipelines:
   deploy:
     run: |-
+      devspace run check-tools
+      ./scripts/devspace-cluster-backend.sh validate-provider
+      ./scripts/devspace-cluster-backend.sh publish-cluster-env
+      if [ "${CONFIG_CONNECTOR_ENABLED}" = "true" ]; then
+        ./scripts/config-connector.sh install-operator
+      fi
+
       PHASES=(
-        "etcd gateway-api-crds"
+        # Phase entries are filtered against enabled deployments, so profile-only
+        # names like gke-gateway are no-ops unless their profile is active.
+        "etcd gateway-api-crds gke-gateway gke-config-connector"
         "cert-manager metallb reflector prometheus"
         "metallb-resources"
         "cert-chain trust-manager"
@@ -590,6 +960,36 @@ pipelines:
       fi
 
 commands:
+  check-tools:
+    description: Check required local tools for the active cluster provider
+    section: network
+    command: HOST_INTEGRATION="${HOST_INTEGRATION}" DNS_MODE="${DNS_MODE}" DOCKER_CIDR_PREFIX="${DOCKER_CIDR_PREFIX}" ./scripts/check-tools.sh
+
+  ensure-cluster:
+    description: Ensure/select a development cluster backend
+    section: network
+    command: ./scripts/devspace-cluster-backend.sh ensure
+
+  destroy-cluster:
+    description: Destroy the starter-pack-managed GKE cluster backend
+    section: network
+    command: ./scripts/devspace-cluster-backend.sh destroy-cluster
+
+  test-install:
+    description: Run install diagnostics for the current cluster provider
+    section: network
+    command: ./scripts/devspace-cluster-backend.sh test-install
+
+  print-cluster-env:
+    description: Print the cluster environment contract
+    section: network
+    command: ./scripts/devspace-cluster-backend.sh print-cluster-env
+
+  check-gke-service-extensions:
+    description: Check GKE Service Extensions CRD capabilities
+    section: network
+    command: ./scripts/devspace-cluster-backend.sh check-gke-service-extensions
+
   docker-mac-net-connect:
     description: Connect Docker for Mac to the cluster
     section: network
@@ -610,56 +1010,61 @@ commands:
   update-cluster-dns:
     description: Make external cluster DNS available on the host
     section: network
-    command: |
-      echo >&2 "I: Updating DNS settings..."
-      sudo scutil <<EOF
-      open
-      d.init
-      d.add ServerAddresses * ${DOCKER_CIDR_PREFIX}.254
-      d.add SupplementalMatchDomains * kube
-      set State:/Network/Service/kube/DNS
-      quit
-      EOF
+    command: ./scripts/cluster-dns-command.sh update-darwin "${DOCKER_CIDR_PREFIX}"
 
   update-cluster-dns-linux:
     description: Make external cluster DNS available on a Linux host
     section: network
-    command: |
-      DNS_IP="${DOCKER_CIDR_PREFIX}.254"
-      echo >&2 "I: Updating systemd-resolved DNS settings..."
-      LINK="$(ip route get "${DNS_IP}" | awk '{for (i = 1; i <= NF; i++) if ($i == "dev") {print $(i + 1); exit}}')"
-      if [ -z "${LINK}" ]; then
-        echo >&2 "E: Could not determine Linux route interface for ${DNS_IP}"
-        exit 1
-      fi
-      sudo resolvectl dns "${LINK}" "${DNS_IP}"
-      sudo resolvectl domain "${LINK}" "~kube"
-      sudo resolvectl flush-caches
+    command: ./scripts/cluster-dns-command.sh update-linux "${DOCKER_CIDR_PREFIX}"
 
   reset-cluster-dns:
     description: Reset DNS service
     section: network
-    command: |
-      echo >&2 "I: Resetting DNS..."
-      sudo scutil <<EOF
-      open
-      remove State:/Network/Service/kube/DNS
-      quit
-      EOF
+    command: ./scripts/cluster-dns-command.sh reset-darwin "${DOCKER_CIDR_PREFIX}"
 
   reset-cluster-dns-linux:
     description: Reset Linux systemd-resolved cluster DNS service
     section: network
+    command: ./scripts/cluster-dns-command.sh reset-linux "${DOCKER_CIDR_PREFIX}"
+
+  gke-gateway-resources:
+    description: Print GKE Gateway generated load balancer resource names
+    section: network
     command: |
-      DNS_IP="${DOCKER_CIDR_PREFIX}.254"
-      echo >&2 "I: Resetting systemd-resolved DNS settings..."
-      LINK="$(ip route get "${DNS_IP}" | awk '{for (i = 1; i <= NF; i++) if ($i == "dev") {print $(i + 1); exit}}')"
-      if [ -z "${LINK}" ]; then
-        echo >&2 "E: Could not determine Linux route interface for ${DNS_IP}"
-        exit 1
+      GATEWAY_NAME="${GATEWAY_NAME:-gateway}"
+      GATEWAY_NS="${GATEWAY_NAMESPACE:-gke-gateway}"
+      echo "gateway=${GATEWAY_NS}/${GATEWAY_NAME}"
+      echo "region=${GKE_REGION}"
+      echo "address=$(kubectl -n "${GATEWAY_NS}" get gateway "${GATEWAY_NAME}" -o go-template='{{ range .status.addresses }}{{ .value }}{{ "\n" }}{{ end }}' | head -n1)"
+      echo "forwarding_rules=$(kubectl -n "${GATEWAY_NS}" get gateway "${GATEWAY_NAME}" -o go-template='{{ index .metadata.annotations "networking.gke.io/forwarding-rules" }}')"
+      echo "backend_services=$(kubectl -n "${GATEWAY_NS}" get gateway "${GATEWAY_NAME}" -o go-template='{{ index .metadata.annotations "networking.gke.io/backend-services" }}')"
+      echo "url_maps=$(kubectl -n "${GATEWAY_NS}" get gateway "${GATEWAY_NAME}" -o go-template='{{ index .metadata.annotations "networking.gke.io/url-maps" }}')"
+
+  gke-dev-registry-info:
+    description: Print GKE dev image registry configuration
+    section: network
+    command: |
+      HOST="${DEV_REGISTRY_HOST}"
+      REGISTRY="${DEV_REGISTRY}"
+      PREFIX=""
+      if [ -z "${HOST}" ]; then
+        HOST="${GKE_REGION}-docker.pkg.dev"
       fi
-      sudo resolvectl revert "${LINK}"
-      sudo resolvectl flush-caches
+      if [ -z "${REGISTRY}" ]; then
+        if [ -z "${GKE_PROJECT_ID}" ]; then
+          echo >&2 "E: GKE registry configuration is missing."
+          echo >&2 "I: Set the required GKE vars, then run 'devspace --var CLUSTER_PROVIDER=gke run ensure-cluster'."
+          exit 1
+        fi
+        REGISTRY="${HOST}/${GKE_PROJECT_ID}/${DEV_REGISTRY_REPOSITORY}"
+      fi
+      if [ -z "${PREFIX}" ]; then
+        PREFIX="${REGISTRY}"
+      fi
+      echo "export DEV_REGISTRY_HOST=${HOST}"
+      echo "export DEV_REGISTRY=${REGISTRY}"
+      echo "export DEV_REGISTRY_IMAGE_PREFIX=${PREFIX}"
+      echo "gcloud auth configure-docker ${HOST}"
 
   import-root-ca:
     description: Import the root CA certificate of the cluster
@@ -670,8 +1075,7 @@ commands:
       trap 'rm -f "${CERTFILE}"' EXIT
 
       echo >&2 "I: Extracting Root CA certificate..."
-      kubectl get secret -n istio-ingress cluster-root-ca-secret \
-        -o jsonpath='{.data.tls\.crt}' | base64 -d > "${CERTFILE}"
+      kubectl get secret -n "${GATEWAY_NAMESPACE}" cluster-root-ca-secret -o jsonpath='{.data.tls\.crt}' | base64 -d > "${CERTFILE}"
       if [ ! -s "${CERTFILE}" ]; then
         echo >&2 "E: Failed to extract certificate or certificate is empty"
         exit 1
@@ -693,8 +1097,7 @@ commands:
       trap 'rm -f "${CERTFILE}"' EXIT
 
       echo >&2 "I: Extracting Root CA certificate..."
-      kubectl get secret -n istio-ingress cluster-root-ca-secret \
-        -o jsonpath='{.data.tls\.crt}' | base64 -d > "${CERTFILE}"
+      kubectl get secret -n "${GATEWAY_NAMESPACE}" cluster-root-ca-secret -o jsonpath='{.data.tls\.crt}' | base64 -d > "${CERTFILE}"
       if [ ! -s "${CERTFILE}" ]; then
         echo >&2 "E: Failed to extract certificate or certificate is empty"
         exit 1

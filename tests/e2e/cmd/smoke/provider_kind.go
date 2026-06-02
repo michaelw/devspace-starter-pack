@@ -23,6 +23,6 @@ func (kindProvider) delete(ctx context.Context, clusterName, kubeconfig string) 
 	return runStep(ctx, os.Environ(), "kind", "delete", "cluster", "--name", clusterName, "--kubeconfig", kubeconfig)
 }
 
-func (kindProvider) contextName(clusterName string) string {
-	return "kind-" + clusterName
+func (kindProvider) contextName(_ context.Context, clusterName string) (string, error) {
+	return "kind-" + clusterName, nil
 }
