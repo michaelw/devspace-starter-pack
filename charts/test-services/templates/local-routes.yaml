@@ -1,0 +1,87 @@
+{{- if eq .Values.gatewayProvider "local-istio" -}}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http
+  namespace: httpbin
+spec:
+  parentRefs:
+    - name: gateway
+      namespace: {{ .Values.gatewayNamespace }}
+      sectionName: http
+    - name: gateway
+      namespace: {{ .Values.gatewayNamespace }}
+      sectionName: https
+  hostnames:
+    - "httpbin.{{ .Values.dnsDomain }}"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            add:
+              - name: x-gateway-api
+                value: "true"
+      backendRefs:
+        - name: httpbin
+          port: 8000
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: httpbin-istio
+  namespace: httpbin
+spec:
+  hosts:
+    - "httpbin.istio.{{ include "test-services.localIstioDomain" . }}"
+  gateways:
+    - {{ .Values.istioGatewayNamespace }}/{{ .Values.istioGatewayName }}
+  http:
+    - match:
+        - uri:
+            prefix: /
+      headers:
+        request:
+          add:
+            x-istio-gateway: "true"
+        response:
+          add:
+            x-gateway-attempt-count: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%"
+            x-gateway-response-flags: "%RESPONSE_FLAGS%"
+      retries:
+        attempts: 4
+        perTryTimeout: 2s
+        retryOn: 5xx,gateway-error,connect-failure,refused-stream
+        retryRemoteLocalities: true
+      timeout: 30s
+      route:
+        - destination:
+            host: httpbin
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: httpbin
+  namespace: httpbin
+spec:
+  hosts:
+    - httpbin.httpbin.svc.cluster.local
+  http:
+    - retries:
+        attempts: 4
+        perTryTimeout: 2s
+        retryOn: 5xx,reset,connect-failure,refused-stream
+        retryRemoteLocalities: true
+      headers:
+        response:
+          add:
+            x-mesh-attempt-count: "%UPSTREAM_REQUEST_ATTEMPT_COUNT%"
+            x-mesh-response-flags: "%RESPONSE_FLAGS%"
+      route:
+        - destination:
+            host: httpbin.httpbin.svc.cluster.local
+{{- end -}}

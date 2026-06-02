@@ -1,0 +1,42 @@
+{{- if eq .Values.gatewayProvider "gke-gateway" -}}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: https
+  namespace: httpbin
+spec:
+  parentRefs:
+    - name: gateway
+      namespace: {{ .Values.gatewayNamespace }}
+      sectionName: https
+  hostnames:
+    - "httpbin.{{ .Values.dnsDomain }}"
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: httpbin
+          port: 8000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http-redirect
+  namespace: httpbin
+spec:
+  parentRefs:
+    - name: gateway
+      namespace: {{ .Values.gatewayNamespace }}
+      sectionName: http
+  hostnames:
+    - "httpbin.{{ .Values.dnsDomain }}"
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301
+{{- end -}}

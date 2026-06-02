@@ -38,7 +38,11 @@ func assertOptionalHTTPSRoute(t *testing.T) {
 	if !httpbinRouteInstalled(t) {
 		t.Skip("optional httpbin route is not installed")
 	}
-	assertHTTPSGet(t, "HTTPS route", "https://httpbin.int.kube/get")
+	assertHTTPSGet(t, "HTTPS route", "https://"+routeHost("httpbin")+"/get")
+	if clusterProvider() == "gke" {
+		assertHTTPSHeaderPreserved(t, "httpbin Authorization header", "https://"+routeHost("httpbin")+"/headers", "Authorization", "Bearer devspace-starter-pack-test")
+		assertHTTPRedirectsToHTTPS(t, "httpbin HTTP route", "http://"+routeHost("httpbin")+"/get")
+	}
 }
 
 func assertOptionalTracingRoute(t *testing.T) {
@@ -47,7 +51,13 @@ func assertOptionalTracingRoute(t *testing.T) {
 	if !httpRouteInstalled(t, "observability", "jaeger") {
 		t.Fatal("observability/jaeger HTTPRoute is not installed")
 	}
-	assertHTTPSGet(t, "Jaeger HTTPS route", "https://jaeger.int.kube/")
+	if clusterProvider() == "gke" && gkeProtection() == "iap" {
+		assertGCPBackendPolicyInstalled(t, "observability", "jaeger-iap")
+		assertHTTPSRequiresIAP(t, "Jaeger HTTPS route", "https://"+routeHost("jaeger")+"/")
+		assertHTTPRedirectsToHTTPS(t, "Jaeger HTTP route", "http://"+routeHost("jaeger")+"/")
+		return
+	}
+	assertHTTPSGet(t, "Jaeger HTTPS route", "https://"+routeHost("jaeger")+"/")
 }
 
 func assertOptionalGrafanaRoute(t *testing.T) {
@@ -55,6 +65,12 @@ func assertOptionalGrafanaRoute(t *testing.T) {
 
 	if !httpRouteInstalled(t, "observability", "grafana") {
 		t.Fatal("observability/grafana HTTPRoute is not installed")
+	}
+	if clusterProvider() == "gke" && gkeProtection() == "iap" {
+		assertGCPBackendPolicyInstalled(t, "observability", "grafana-iap")
+		assertHTTPSRequiresIAP(t, "Grafana HTTPS route", "https://"+routeHost("grafana")+"/login")
+		assertHTTPRedirectsToHTTPS(t, "Grafana HTTP route", "http://"+routeHost("grafana")+"/login")
+		return
 	}
 	assertHTTPSGet(t, "Grafana HTTPS route", "https://grafana.int.kube/login")
 }
