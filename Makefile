@@ -1,4 +1,4 @@
-.PHONY: help install-precommit setup-dev lint lint-actions lint-devspace test test-install test-e2e smoke clean verify
+.PHONY: help install-precommit setup-dev lint lint-actions lint-devspace lint-yaml lint-helm test test-install test-e2e smoke smoke-gke clean format verify check
 
 help: ## Display this help message
 	@echo "Available targets:"
@@ -68,6 +68,9 @@ test-e2e: ## Run full ephemeral-cluster DevSpace e2e validation
 	go run ./tests/e2e/cmd/smoke
 
 smoke: test-e2e ## Run expensive smoke validation
+
+smoke-gke: ## Run expensive GKE smoke validation
+	CLUSTER_PROVIDER=gke go run ./tests/e2e/cmd/smoke
 
 clean: ## Clean up generated files
 	@echo "Cleaning up..."
