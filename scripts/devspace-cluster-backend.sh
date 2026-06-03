@@ -805,7 +805,6 @@ ensure_gke_external() {
 
 destroy_cluster() {
   load_devspace_vars
-  require_tool devspace
   require_tool gcloud
   require_tool kubectl
   require_tool terraform
@@ -870,7 +869,7 @@ destroy_cluster() {
   ensure_gcloud_auth "${project_id}"
 
   echo >&2 "I: Resetting host DNS integration if configured..."
-  devspace run reset-cluster-dns >/dev/null 2>&1 || true
+  reset_destroy_host_dns || true
 
   destroy_cluster_kubernetes_cleanup "${project_id}" "${region}" "${cluster_name}" "${managed_context}"
   cleanup_gke_dns_records "${project_id}" "${dns_zone}"
@@ -884,6 +883,20 @@ destroy_cluster() {
   cleanup_destroyed_kube_context "${managed_context}"
   cleanup_destroyed_devspace_cache "${managed_context}" "${project_id}"
   echo >&2 "I: Managed GKE cluster destroyed."
+}
+
+reset_destroy_host_dns() {
+  case "$(uname -s)" in
+    Darwin)
+      ./scripts/cluster-dns.sh reset-darwin cloud-dns "${DNS_SERVICE_ID:-gcp-kube}" "${GKE_DNS_DOMAIN:-gcp.kube}" "${GKE_DNS_NAMESERVERS:-}" ""
+      ;;
+    Linux)
+      ./scripts/cluster-dns.sh reset-linux cloud-dns "${DNS_SERVICE_ID:-gcp-kube}" "${GKE_DNS_DOMAIN:-gcp.kube}" "${GKE_DNS_NAMESERVERS:-}" ""
+      ;;
+    *)
+      echo >&2 "I: Skipping host DNS reset on unsupported OS $(uname -s)."
+      ;;
+  esac
 }
 
 cleanup_destroyed_kube_context() {
